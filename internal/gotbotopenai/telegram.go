@@ -53,7 +53,7 @@ func (t *Telegram) initReadingMessagesWorker() {
 				t.quitChan <- struct{}{}
 				return
 			}
-			if update.Message == nil && update.Message.Chat == nil {
+			if update.Message == nil || update.Message.Chat == nil {
 				continue
 			}
 			t.msgChan <- &message{update.Message.Chat.ID, update.Message.MessageID, update.Message.Text, update.Message.Command()}
