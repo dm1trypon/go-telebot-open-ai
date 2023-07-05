@@ -2,6 +2,7 @@ package gotbotopenai
 
 import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"go.uber.org/zap"
 )
 
 // NewUpdate gets updates since the last Offset
@@ -24,11 +25,12 @@ type Telegram struct {
 	bot          *tgbotapi.BotAPI
 	updateConfig tgbotapi.UpdateConfig
 	updateChan   tgbotapi.UpdatesChannel
+	log          *zap.Logger
 	msgChan      chan *message
 	quitChan     chan<- struct{}
 }
 
-func NewTelegram(cfg TelegramSettings, msgChan chan *message, quitChan chan<- struct{}) (*Telegram, error) {
+func NewTelegram(cfg TelegramSettings, log *zap.Logger, msgChan chan *message, quitChan chan<- struct{}) (*Telegram, error) {
 	bot, err := tgbotapi.NewBotAPI(cfg.Token)
 	if err != nil {
 		return nil, err
@@ -37,7 +39,7 @@ func NewTelegram(cfg TelegramSettings, msgChan chan *message, quitChan chan<- st
 	updateConfig := tgbotapi.NewUpdate(updaterOffset)
 	updateConfig.Timeout = cfg.Timeout
 	updateChan := bot.GetUpdatesChan(updateConfig)
-	return &Telegram{bot, updateConfig, updateChan, msgChan, quitChan}, nil
+	return &Telegram{bot, updateConfig, updateChan, log, msgChan, quitChan}, nil
 }
 
 func (t *Telegram) Run() {
@@ -56,6 +58,10 @@ func (t *Telegram) initReadingMessagesWorker() {
 			if update.Message == nil || update.Message.Chat == nil {
 				continue
 			}
+			t.log.Debug("Received message",
+				zap.String("user", update.Message.From.UserName),
+				zap.String("body", update.Message.Text),
+				zap.String("command", update.Message.Command()))
 			t.msgChan <- &message{update.Message.Chat.ID, update.Message.MessageID, update.Message.Text, update.Message.Command()}
 		}
 	}

@@ -3,9 +3,11 @@ package gotbotopenai
 import (
 	"bytes"
 	"context"
-	"github.com/dm1trypon/go-telebot-open-ai/pkg/strgen"
-	"log"
 	"sync"
+
+	"go.uber.org/zap"
+
+	"github.com/dm1trypon/go-telebot-open-ai/pkg/strgen"
 )
 
 const (
@@ -16,6 +18,9 @@ const (
 	commandImageSize512x512   = "image512x512 "
 	commandImageSize1024x1024 = "image1024x1024"
 	commandHelp               = "help"
+
+	lenGenImageName    = 16
+	formatGenImageName = ".jpeg"
 )
 
 type commandByChatID struct {
@@ -46,13 +51,15 @@ type GoTBotOpenAI struct {
 	botClient       BotClient
 	chatGPT         *ChatGPT
 	commandByChatID commandByChatID
+	log             *zap.Logger
 	msgChan         chan *message
 	quitChan        chan<- struct{}
 }
 
-func NewGoTBotOpenAI(cfg *Config, quitChan chan<- struct{}) (*GoTBotOpenAI, error) {
+func NewGoTBotOpenAI(cfg *Config, log *zap.Logger) (*GoTBotOpenAI, error) {
 	msgChan := make(chan *message)
-	telegram, err := NewTelegram(cfg.Telegram, msgChan, quitChan)
+	quitChan := make(chan struct{}, 1)
+	telegram, err := NewTelegram(cfg.Telegram, log, msgChan, quitChan)
 	if err != nil {
 		return nil, err
 	}
@@ -61,6 +68,7 @@ func NewGoTBotOpenAI(cfg *Config, quitChan chan<- struct{}) (*GoTBotOpenAI, erro
 		botClient:       telegram,
 		chatGPT:         NewChatGPT(cfg.ChatGPT.Token),
 		commandByChatID: commandByChatID{value: make(map[int64]string)},
+		log:             log,
 		msgChan:         msgChan,
 		quitChan:        quitChan,
 	}, nil
@@ -99,12 +107,12 @@ func (g *GoTBotOpenAI) processMessage(msg *message) {
 	)
 	defer func() {
 		if isFile {
-			err = g.botClient.ReplyFile(msg.messageID, msg.chatID, respBody.Bytes(), strgen.Generate()+".jpeg")
+			err = g.botClient.ReplyFile(msg.messageID, msg.chatID, respBody.Bytes(), strgen.Generate(lenGenImageName)+formatGenImageName)
 		} else {
 			err = g.botClient.ReplyText(msg.messageID, msg.chatID, respBody.String())
 		}
 		if err != nil {
-			log.Println("Reply message err:", err)
+			g.log.Error("Reply message error:", zap.Error(err))
 		}
 		respBody.Reset()
 	}()
@@ -184,7 +192,7 @@ func (g *GoTBotOpenAI) processTextMessage(respBody *bytes.Buffer, text string, c
 	)
 	defer func() {
 		if err != nil {
-			log.Println("ChatGPT generation error:", err)
+			g.log.Error("ChatGPT generation error:", zap.Error(err))
 			respBody.WriteString("Запрос не удовлетворяет политике работы с OpenAI https://openai.com/policies/usage-policies. Пожалуйста, переформулируйте запрос.")
 			isFile = false
 			return
