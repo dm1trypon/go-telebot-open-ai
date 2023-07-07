@@ -66,7 +66,7 @@ func NewGoTBotOpenAI(cfg *Config, log *zap.Logger) (*GoTBotOpenAI, error) {
 	return &GoTBotOpenAI{
 		cfg:             cfg,
 		botClient:       telegram,
-		chatGPT:         NewChatGPT(cfg.ChatGPT.Token),
+		chatGPT:         NewChatGPT(cfg.ChatGPT.Tokens),
 		commandByChatID: commandByChatID{value: make(map[int64]string)},
 		log:             log,
 		msgChan:         msgChan,
@@ -76,15 +76,16 @@ func NewGoTBotOpenAI(cfg *Config, log *zap.Logger) (*GoTBotOpenAI, error) {
 
 func (g *GoTBotOpenAI) Run() {
 	var wg sync.WaitGroup
-	for i := 0; i < g.cfg.MessageWorkers; i++ {
+	// worker by chatGPT token
+	for token := range g.cfg.ChatGPT.Tokens {
 		wg.Add(1)
-		go g.initProcessMessagesWorker(&wg)
+		go g.initProcessMessagesWorker(&wg, token)
 	}
 	g.botClient.Run()
 	wg.Wait()
 }
 
-func (g *GoTBotOpenAI) initProcessMessagesWorker(wg *sync.WaitGroup) {
+func (g *GoTBotOpenAI) initProcessMessagesWorker(wg *sync.WaitGroup, token string) {
 	defer wg.Done()
 	for {
 		select {
@@ -93,12 +94,12 @@ func (g *GoTBotOpenAI) initProcessMessagesWorker(wg *sync.WaitGroup) {
 				g.quitChan <- struct{}{}
 				return
 			}
-			g.processMessage(msg)
+			g.processMessage(msg, token)
 		}
 	}
 }
 
-func (g *GoTBotOpenAI) processMessage(msg *message) {
+func (g *GoTBotOpenAI) processMessage(msg *message, token string) {
 	if msg == nil {
 		return
 	}
@@ -122,7 +123,7 @@ func (g *GoTBotOpenAI) processMessage(msg *message) {
 	if respBody.Len() > 0 {
 		return
 	}
-	isFile = g.processTextMessage(&respBody, msg.text, msg.chatID)
+	isFile = g.processTextMessage(&respBody, token, msg.text, msg.chatID)
 }
 
 func (g *GoTBotOpenAI) switchCommands(respBody *bytes.Buffer, msg *message) {
@@ -183,7 +184,7 @@ func (g *GoTBotOpenAI) switchCommands(respBody *bytes.Buffer, msg *message) {
 	}
 }
 
-func (g *GoTBotOpenAI) processTextMessage(respBody *bytes.Buffer, text string, chatID int64) (isFile bool) {
+func (g *GoTBotOpenAI) processTextMessage(respBody *bytes.Buffer, token, text string, chatID int64) (isFile bool) {
 	if g.commandByChatID.CurrentCommand(chatID) == "" {
 		respBody.WriteString("Сессия с ботом не активна. Чтобы начать сессию с ботом, введите команду /start. Чтобы посмотреть описание команд, введите команду /help.")
 		return
@@ -204,18 +205,18 @@ func (g *GoTBotOpenAI) processTextMessage(respBody *bytes.Buffer, text string, c
 	ctx := context.Background()
 	switch g.commandByChatID.CurrentCommand(chatID) {
 	case commandText:
-		result, err = g.chatGPT.GenerateText(ctx, text)
+		result, err = g.chatGPT.GenerateText(ctx, token, text)
 		return
 	case commandImageSize256x256:
-		result, err = g.chatGPT.GenerateImage(ctx, text, 1)
+		result, err = g.chatGPT.GenerateImage(ctx, token, text, 1)
 		isFile = true
 		return
 	case commandImageSize512x512:
-		result, err = g.chatGPT.GenerateImage(ctx, text, 2)
+		result, err = g.chatGPT.GenerateImage(ctx, token, text, 2)
 		isFile = true
 		return
 	case commandImageSize1024x1024:
-		result, err = g.chatGPT.GenerateImage(ctx, text, 3)
+		result, err = g.chatGPT.GenerateImage(ctx, token, text, 3)
 		isFile = true
 		return
 	}

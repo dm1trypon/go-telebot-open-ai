@@ -15,23 +15,27 @@ var imageSizes = map[int]string{
 }
 
 type ChatGPT struct {
-	client *openai.Client
+	clients map[string]*openai.Client
 }
 
-func NewChatGPT(token string) *ChatGPT {
-	return &ChatGPT{
-		client: openai.NewClient(token),
+func NewChatGPT(tokens map[string]struct{}) *ChatGPT {
+	chatGPT := &ChatGPT{
+		clients: make(map[string]*openai.Client, len(tokens)),
 	}
+	for token := range tokens {
+		chatGPT.clients[token] = openai.NewClient(token)
+	}
+	return chatGPT
 }
 
-func (c *ChatGPT) GenerateImage(ctx context.Context, prompt string, sizeType int) ([]byte, error) {
+func (c *ChatGPT) GenerateImage(ctx context.Context, token, prompt string, sizeType int) ([]byte, error) {
 	reqBase64 := openai.ImageRequest{
 		Prompt:         prompt,
 		Size:           imageSizes[sizeType],
 		ResponseFormat: openai.CreateImageResponseFormatB64JSON,
 		N:              1,
 	}
-	respBase64, err := c.client.CreateImage(ctx, reqBase64)
+	respBase64, err := c.clients[token].CreateImage(ctx, reqBase64)
 	if err != nil {
 		return nil, err
 	}
@@ -41,8 +45,8 @@ func (c *ChatGPT) GenerateImage(ctx context.Context, prompt string, sizeType int
 	return base64.StdEncoding.DecodeString(respBase64.Data[0].B64JSON)
 }
 
-func (c *ChatGPT) GenerateText(ctx context.Context, content string) ([]byte, error) {
-	resp, err := c.client.CreateChatCompletion(
+func (c *ChatGPT) GenerateText(ctx context.Context, token, content string) ([]byte, error) {
+	resp, err := c.clients[token].CreateChatCompletion(
 		ctx,
 		openai.ChatCompletionRequest{
 			Model: openai.GPT3Dot5Turbo0613,

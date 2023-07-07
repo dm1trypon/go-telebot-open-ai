@@ -1,19 +1,22 @@
 package gotbotopenai
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
+var errEmptyChatGPTTokens = errors.New("empty ChatGPT tokens")
+
 type Config struct {
 	Telegram       TelegramSettings
 	ChatGPT        ChatGPTSettings
 	Logger         zap.Config
-	MessageWorkers int
 	LenMessageChan int
 }
 
@@ -25,7 +28,7 @@ type TelegramSettings struct {
 }
 
 type ChatGPTSettings struct {
-	Token string
+	Tokens map[string]struct{}
 }
 
 func NewConfig() (*Config, error) {
@@ -48,13 +51,24 @@ func NewConfig() (*Config, error) {
 			return nil, err
 		}
 	}
-	messageWorkers, err := strconv.Atoi(os.Getenv("MESSAGE_WORKERS"))
-	if err != nil {
-		return nil, err
-	}
 	lenMessageChan, err := strconv.Atoi(os.Getenv("LEN_MESSAGE_CHAN"))
 	if err != nil {
 		return nil, err
+	}
+	chatGPTTokens := os.Getenv("CHAT_GPT_TOKENS")
+	chatGPTTokens = strings.TrimSuffix(chatGPTTokens, "\n")
+	chatGPTTokens = strings.TrimSuffix(chatGPTTokens, "\r")
+	tokensArr := strings.Split(os.Getenv("CHAT_GPT_TOKENS"), ",")
+	// to exclude identical tokens
+	tokensMap := make(map[string]struct{}, len(tokensArr))
+	for idx := range tokensArr {
+		if tokensArr[idx] == "" {
+			continue
+		}
+		tokensMap[tokensArr[idx]] = struct{}{}
+	}
+	if len(tokensMap) == 0 {
+		return nil, errEmptyChatGPTTokens
 	}
 	return &Config{
 		Telegram: TelegramSettings{
@@ -64,10 +78,9 @@ func NewConfig() (*Config, error) {
 			ReconnectInterval: telegramReconnectInterval,
 		},
 		ChatGPT: ChatGPTSettings{
-			Token: os.Getenv("CHAT_GPT_TOKEN"),
+			Tokens: tokensMap,
 		},
 		Logger:         newLogger(),
-		MessageWorkers: messageWorkers,
 		LenMessageChan: lenMessageChan,
 	}, nil
 }
