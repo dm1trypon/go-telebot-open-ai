@@ -28,7 +28,9 @@ type TelegramSettings struct {
 }
 
 type ChatGPTSettings struct {
-	Tokens map[string]struct{}
+	Tokens       map[string]struct{}
+	RetryRequest int
+	RetryTimeout int // seconds
 }
 
 func NewConfig() (*Config, error) {
@@ -70,6 +72,14 @@ func NewConfig() (*Config, error) {
 	if len(tokensMap) == 0 {
 		return nil, errEmptyChatGPTTokens
 	}
+	chatGPTRetryRequest, err := strconv.Atoi(os.Getenv("CHAT_GPT_RETRY_REQUEST"))
+	if err != nil {
+		return nil, err
+	}
+	chatGPTRetryTimeout, err := strconv.Atoi(os.Getenv("CHAT_GPT_RETRY_TIMEOUT"))
+	if err != nil {
+		return nil, err
+	}
 	return &Config{
 		Telegram: TelegramSettings{
 			Token:             os.Getenv("TELEGRAM_TOKEN"),
@@ -78,7 +88,9 @@ func NewConfig() (*Config, error) {
 			ReconnectInterval: telegramReconnectInterval,
 		},
 		ChatGPT: ChatGPTSettings{
-			Tokens: tokensMap,
+			Tokens:       tokensMap,
+			RetryRequest: chatGPTRetryRequest,
+			RetryTimeout: chatGPTRetryTimeout,
 		},
 		Logger:         newLogger(),
 		LenMessageChan: lenMessageChan,
