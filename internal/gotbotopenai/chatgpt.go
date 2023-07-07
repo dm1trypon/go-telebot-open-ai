@@ -4,8 +4,15 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"strings"
+	"time"
 
 	"github.com/sashabaranov/go-openai"
+)
+
+const (
+	errChatGPTStatusCode503Response = "status code: 503"
+	errChatGPTStatusCode429Response = "status code: 429"
 )
 
 var imageSizes = map[int]string{
@@ -15,14 +22,18 @@ var imageSizes = map[int]string{
 }
 
 type ChatGPT struct {
-	clients map[string]*openai.Client
+	clients      map[string]*openai.Client
+	retryRequest int
+	retryTimeout int
 }
 
-func NewChatGPT(tokens map[string]struct{}) *ChatGPT {
+func NewChatGPT(cfg ChatGPTSettings) *ChatGPT {
 	chatGPT := &ChatGPT{
-		clients: make(map[string]*openai.Client, len(tokens)),
+		clients:      make(map[string]*openai.Client, len(cfg.Tokens)),
+		retryRequest: cfg.RetryRequest,
+		retryTimeout: cfg.RetryTimeout,
 	}
-	for token := range tokens {
+	for token := range cfg.Tokens {
 		chatGPT.clients[token] = openai.NewClient(token)
 	}
 	return chatGPT
@@ -35,7 +46,18 @@ func (c *ChatGPT) GenerateImage(ctx context.Context, token, prompt string, sizeT
 		ResponseFormat: openai.CreateImageResponseFormatB64JSON,
 		N:              1,
 	}
-	respBase64, err := c.clients[token].CreateImage(ctx, reqBase64)
+	var (
+		respBase64 openai.ImageResponse
+		err        error
+	)
+	for i := 0; i < c.retryRequest; i++ {
+		respBase64, err = c.clients[token].CreateImage(ctx, reqBase64)
+		if isSkipRetry(err) {
+			break
+		}
+		time.Sleep(time.Second * time.Duration(c.retryTimeout))
+	}
+	respBase64, err = c.clients[token].CreateImage(ctx, reqBase64)
 	if err != nil {
 		return nil, err
 	}
@@ -46,18 +68,28 @@ func (c *ChatGPT) GenerateImage(ctx context.Context, token, prompt string, sizeT
 }
 
 func (c *ChatGPT) GenerateText(ctx context.Context, token, content string) ([]byte, error) {
-	resp, err := c.clients[token].CreateChatCompletion(
-		ctx,
-		openai.ChatCompletionRequest{
-			Model: openai.GPT3Dot5Turbo0613,
-			Messages: []openai.ChatCompletionMessage{
-				{
-					Role:    openai.ChatMessageRoleUser,
-					Content: content,
+	var (
+		resp openai.ChatCompletionResponse
+		err  error
+	)
+	for i := 0; i < c.retryRequest; i++ {
+		resp, err = c.clients[token].CreateChatCompletion(
+			ctx,
+			openai.ChatCompletionRequest{
+				Model: openai.GPT3Dot5Turbo0613,
+				Messages: []openai.ChatCompletionMessage{
+					{
+						Role:    openai.ChatMessageRoleUser,
+						Content: content,
+					},
 				},
 			},
-		},
-	)
+		)
+		if isSkipRetry(err) {
+			break
+		}
+		time.Sleep(time.Second * time.Duration(c.retryTimeout))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -65,4 +97,8 @@ func (c *ChatGPT) GenerateText(ctx context.Context, token, content string) ([]by
 		return nil, errors.New("empty resp choices")
 	}
 	return []byte(resp.Choices[0].Message.Content), nil
+}
+
+func isSkipRetry(err error) bool {
+	return err == nil || (err != nil && (!strings.Contains(err.Error(), errChatGPTStatusCode503Response) && (!strings.Contains(err.Error(), errChatGPTStatusCode429Response))))
 }

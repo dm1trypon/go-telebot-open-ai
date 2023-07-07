@@ -66,7 +66,7 @@ func NewGoTBotOpenAI(cfg *Config, log *zap.Logger) (*GoTBotOpenAI, error) {
 	return &GoTBotOpenAI{
 		cfg:             cfg,
 		botClient:       telegram,
-		chatGPT:         NewChatGPT(cfg.ChatGPT.Tokens),
+		chatGPT:         NewChatGPT(cfg.ChatGPT),
 		commandByChatID: commandByChatID{value: make(map[int64]string)},
 		log:             log,
 		msgChan:         msgChan,
