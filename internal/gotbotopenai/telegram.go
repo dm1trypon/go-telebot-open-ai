@@ -62,6 +62,12 @@ func (t *Telegram) initReadingMessagesWorker() {
 				zap.String("user", update.Message.From.UserName),
 				zap.String("body", update.Message.Text),
 				zap.String("command", update.Message.Command()))
+			if len(t.msgChan) == cap(t.msgChan) {
+				if err := t.ReplyText(update.Message.MessageID, update.Message.Chat.ID, "Слишком большая нагрузка на бота, выполните запрос чуть позже"); err != nil {
+					t.log.Error("Reply message error:", zap.Error(err))
+				}
+				return
+			}
 			t.msgChan <- &message{update.Message.Chat.ID, update.Message.MessageID, update.Message.Text, update.Message.Command()}
 		}
 	}

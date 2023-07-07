@@ -57,7 +57,7 @@ type GoTBotOpenAI struct {
 }
 
 func NewGoTBotOpenAI(cfg *Config, log *zap.Logger) (*GoTBotOpenAI, error) {
-	msgChan := make(chan *message)
+	msgChan := make(chan *message, cfg.LenMessageChan)
 	quitChan := make(chan struct{}, 1)
 	telegram, err := NewTelegram(cfg.Telegram, log, msgChan, quitChan)
 	if err != nil {
@@ -76,8 +76,10 @@ func NewGoTBotOpenAI(cfg *Config, log *zap.Logger) (*GoTBotOpenAI, error) {
 
 func (g *GoTBotOpenAI) Run() {
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go g.initProcessMessagesWorker(&wg)
+	for i := 0; i < g.cfg.MessageWorkers; i++ {
+		wg.Add(1)
+		go g.initProcessMessagesWorker(&wg)
+	}
 	g.botClient.Run()
 	wg.Wait()
 }

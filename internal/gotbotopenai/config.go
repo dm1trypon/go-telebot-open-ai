@@ -10,9 +10,11 @@ import (
 )
 
 type Config struct {
-	Telegram TelegramSettings
-	ChatGPT  ChatGPTSettings
-	Logger   zap.Config
+	Telegram       TelegramSettings
+	ChatGPT        ChatGPTSettings
+	Logger         zap.Config
+	MessageWorkers int
+	LenMessageChan int
 }
 
 type TelegramSettings struct {
@@ -46,6 +48,14 @@ func NewConfig() (*Config, error) {
 			return nil, err
 		}
 	}
+	messageWorkers, err := strconv.Atoi(os.Getenv("MESSAGE_WORKERS"))
+	if err != nil {
+		return nil, err
+	}
+	lenMessageChan, err := strconv.Atoi(os.Getenv("LEN_MESSAGE_CHAN"))
+	if err != nil {
+		return nil, err
+	}
 	return &Config{
 		Telegram: TelegramSettings{
 			Token:             os.Getenv("TELEGRAM_TOKEN"),
@@ -56,7 +66,9 @@ func NewConfig() (*Config, error) {
 		ChatGPT: ChatGPTSettings{
 			Token: os.Getenv("CHAT_GPT_TOKEN"),
 		},
-		Logger: newLogger(),
+		Logger:         newLogger(),
+		MessageWorkers: messageWorkers,
+		LenMessageChan: lenMessageChan,
 	}, nil
 }
 
@@ -70,6 +82,8 @@ func newLogger() zap.Config {
 	zapCfg.EncoderConfig.LevelKey = "level"
 	zapCfg.EncoderConfig.TimeKey = "dttm"
 	zapCfg.EncoderConfig.CallerKey = "call"
+	zapCfg.EncoderConfig.StacktraceKey = "stack_trace_key"
+	zapCfg.EncoderConfig.NameKey = "name_key"
 	zapCfg.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	return zapCfg
 }
