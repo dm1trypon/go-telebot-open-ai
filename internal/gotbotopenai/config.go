@@ -16,6 +16,7 @@ var errEmptyChatGPTTokens = errors.New("empty ChatGPT tokens")
 type Config struct {
 	Telegram       TelegramSettings
 	ChatGPT        ChatGPTSettings
+	DreamBooth     DreamBoothSettings
 	Logger         zap.Config
 	LenMessageChan int
 }
@@ -31,6 +32,12 @@ type ChatGPTSettings struct {
 	Tokens       map[string]struct{}
 	RetryRequest int
 	RetryTimeout int // seconds
+}
+
+type DreamBoothSettings struct {
+	Key          string
+	RetryCount   int
+	RetryTimeout int
 }
 
 func NewConfig() (*Config, error) {
@@ -80,6 +87,14 @@ func NewConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	dreamBoothRetryCount, err := strconv.Atoi(os.Getenv("DREAMBOOTH_RETRY_COUNT"))
+	if err != nil {
+		return nil, err
+	}
+	dreamBoothRetryTimeout, err := strconv.Atoi(os.Getenv("DREAMBOOTH_RETRY_TIMEOUT"))
+	if err != nil {
+		return nil, err
+	}
 	return &Config{
 		Telegram: TelegramSettings{
 			Token:             os.Getenv("TELEGRAM_TOKEN"),
@@ -91,6 +106,11 @@ func NewConfig() (*Config, error) {
 			Tokens:       tokensMap,
 			RetryRequest: chatGPTRetryRequest,
 			RetryTimeout: chatGPTRetryTimeout,
+		},
+		DreamBooth: DreamBoothSettings{
+			Key:          os.Getenv("DREAMBOOTH_KEY"),
+			RetryCount:   dreamBoothRetryCount,
+			RetryTimeout: dreamBoothRetryTimeout,
 		},
 		Logger:         newLogger(),
 		LenMessageChan: lenMessageChan,

@@ -30,7 +30,7 @@ type Telegram struct {
 	quitChan     chan<- struct{}
 }
 
-func NewTelegram(cfg TelegramSettings, log *zap.Logger, msgChan chan *message, quitChan chan<- struct{}) (*Telegram, error) {
+func NewTelegram(cfg *TelegramSettings, log *zap.Logger, msgChan chan *message, quitChan chan<- struct{}) (*Telegram, error) {
 	bot, err := tgbotapi.NewBotAPI(cfg.Token)
 	if err != nil {
 		return nil, err
