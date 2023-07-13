@@ -15,6 +15,11 @@ const (
 	errChatGPTStatusCode429Response = "status code: 429"
 )
 
+var (
+	errChatGPTEmptyRespData    = errors.New("ChatGPT empty response data")
+	errChatGPTEmptyRespChoices = errors.New("ChatGPT empty resp choices")
+)
+
 var imageSizes = map[int]string{
 	1: openai.CreateImageSize256x256,
 	2: openai.CreateImageSize512x512,
@@ -27,7 +32,7 @@ type ChatGPT struct {
 	retryTimeout int
 }
 
-func NewChatGPT(cfg ChatGPTSettings) *ChatGPT {
+func NewChatGPT(cfg *ChatGPTSettings) *ChatGPT {
 	chatGPT := &ChatGPT{
 		clients:      make(map[string]*openai.Client, len(cfg.Tokens)),
 		retryRequest: cfg.RetryRequest,
@@ -62,7 +67,7 @@ func (c *ChatGPT) GenerateImage(ctx context.Context, token, prompt string, sizeT
 		return nil, err
 	}
 	if len(respBase64.Data) == 0 {
-		return nil, errors.New("empty resp data")
+		return nil, errChatGPTEmptyRespData
 	}
 	return base64.StdEncoding.DecodeString(respBase64.Data[0].B64JSON)
 }
@@ -94,7 +99,7 @@ func (c *ChatGPT) GenerateText(ctx context.Context, token, content string) ([]by
 		return nil, err
 	}
 	if len(resp.Choices) == 0 {
-		return nil, errors.New("empty resp choices")
+		return nil, errChatGPTEmptyRespChoices
 	}
 	return []byte(resp.Choices[0].Message.Content), nil
 }

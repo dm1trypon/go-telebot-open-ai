@@ -17,6 +17,8 @@ const (
 	commandImageSize256x256   = "image256x256"
 	commandImageSize512x512   = "image512x512 "
 	commandImageSize1024x1024 = "image1024x1024"
+	commandImageCustom        = "imageCustom"
+	commandImageCustomExample = "imageCustomExample"
 	commandHelp               = "help"
 
 	lenGenImageName    = 16
@@ -50,6 +52,7 @@ type GoTBotOpenAI struct {
 	cfg             *Config
 	botClient       BotClient
 	chatGPT         *ChatGPT
+	dreamBoothAPI   *DreamBoothAPI
 	commandByChatID commandByChatID
 	log             *zap.Logger
 	msgChan         chan *message
@@ -59,14 +62,15 @@ type GoTBotOpenAI struct {
 func NewGoTBotOpenAI(cfg *Config, log *zap.Logger) (*GoTBotOpenAI, error) {
 	msgChan := make(chan *message, cfg.LenMessageChan)
 	quitChan := make(chan struct{}, 1)
-	telegram, err := NewTelegram(cfg.Telegram, log, msgChan, quitChan)
+	telegram, err := NewTelegram(&cfg.Telegram, log, msgChan, quitChan)
 	if err != nil {
 		return nil, err
 	}
 	return &GoTBotOpenAI{
 		cfg:             cfg,
 		botClient:       telegram,
-		chatGPT:         NewChatGPT(cfg.ChatGPT),
+		chatGPT:         NewChatGPT(&cfg.ChatGPT),
+		dreamBoothAPI:   NewDreamBoothAPI(log, &cfg.DreamBooth),
 		commandByChatID: commandByChatID{value: make(map[int64]string)},
 		log:             log,
 		msgChan:         msgChan,
@@ -179,8 +183,31 @@ func (g *GoTBotOpenAI) switchCommands(respBody *bytes.Buffer, msg *message) {
 		g.commandByChatID.SetCurrentCommand(msg.chatID, msg.command)
 		respBody.WriteString("Выбрана генерация изображений размером 1024x1024. Введите запрос как можно подробнее, чтобы получить наиболее удовлетворительное сгенерированное изображение.")
 		return
+	case commandImageCustom:
+		if g.commandByChatID.CurrentCommand(msg.chatID) == "" {
+			respBody.WriteString("Сессия с ботом не активна. Чтобы начать сессию с ботом, введите команду /start. Чтобы посмотреть описание команд, введите команду /help.")
+			return
+		}
+		g.commandByChatID.SetCurrentCommand(msg.chatID, msg.command)
+		respBody.WriteString("Выбрана пользовательская генерация изображений. Введите запрос как можно подробнее, чтобы получить наиболее удовлетворительное сгенерированное изображение.")
+		return
 	case commandHelp:
-		respBody.WriteString("Доступные команды бота:\n/start - начало сессии с ботом\n/stop - завершение сессии с ботом\n/image256x256 - генерация изображений размером 256x256, используя модель OpenAI DALL·E\n/image512x512 - генерация изображений размером 512x512, используя модель OpenAI DALL·E\n/image1024x1024 - генерация изображений размером 1024x1024, используя модель OpenAI DALL·E\n/text - генерация текста, используя модель OpenAI gpt-4-32k-0613.")
+		respBody.WriteString(`Доступные команды бота:
+/start - начало сессии с ботом
+/stop - завершение сессии с ботом
+/image256x256 - генерация изображений размером 256x256, используя модель OpenAI DALL·E
+/image512x512 - генерация изображений размером 512x512, используя модель OpenAI DALL·E
+/image1024x1024 - генерация изображений размером 1024x1024, используя модель OpenAI DALL·E
+/imageCustom - генерация изображений, используя разные модели и более точные настройки. Описание доступных полей https://stablediffusionapi.com/docs/community-models-api-v4/dreamboothtext2img#body-attributes.
+/imageCustomExample - пример промта для генерации изображения с кастомными моделями и настройками.
+/text - генерация текста, используя модель OpenAI gpt-4-32k-0613.`)
+	case commandImageCustomExample:
+		respBody.WriteString(`prompt: Iron Man, (Arnold Tsang, Toru Nakayama), Masterpiece, Studio Quality, 6k , toa, toaair, 1boy, glowing, axe, mecha, science_fiction, solo, weapon, jungle , green_background, nature, outdoors, solo, tree, weapon, mask, dynamic lighting, detailed shading, digital texture painting
+negative_prompt: un-detailed skin, semi-realistic, cgi, 3d, render, sketch, cartoon, drawing, ugly eyes, (out of frame:1.3), worst quality, low quality, jpeg artifacts, cgi, sketch, cartoon, drawing, (out of frame:1.1)
+width: 512
+height: 512
+model_id: midjourney
+`)
 	}
 }
 
@@ -190,20 +217,25 @@ func (g *GoTBotOpenAI) processTextMessage(respBody *bytes.Buffer, token, text st
 		return
 	}
 	var (
-		result []byte
-		err    error
+		reqBody, result []byte
+		err             error
 	)
+	command := g.commandByChatID.CurrentCommand(chatID)
 	defer func() {
 		if err != nil {
-			g.log.Error("ChatGPT generation error:", zap.Error(err))
-			respBody.WriteString("Запрос не удовлетворяет политике работы с OpenAI https://openai.com/policies/usage-policies. Пожалуйста, переформулируйте запрос.")
+			g.log.Error("OpenAI generation error:", zap.Error(err))
+			if command == commandImageCustom {
+				respBody.WriteString("Увы, но изображение так и не сгенерировалось. Возможно, некоторые параметры были подобраны неправильно, либо запрос не удовлетворяет политике работы с OpenAI https://openai.com/policies/usage-policies, или же сервис попросту перегружен. Попробуйте переформулировать запрос и отправить его чуть позже.")
+			} else {
+				respBody.WriteString("Запрос не удовлетворяет политике работы с OpenAI https://openai.com/policies/usage-policies. Пожалуйста, переформулируйте запрос.")
+			}
 			isFile = false
 			return
 		}
 		respBody.Write(result)
 	}()
 	ctx := context.Background()
-	switch g.commandByChatID.CurrentCommand(chatID) {
+	switch command {
 	case commandText:
 		result, err = g.chatGPT.GenerateText(ctx, token, text)
 		return
@@ -217,6 +249,15 @@ func (g *GoTBotOpenAI) processTextMessage(respBody *bytes.Buffer, token, text st
 		return
 	case commandImageSize1024x1024:
 		result, err = g.chatGPT.GenerateImage(ctx, token, text, 3)
+		isFile = true
+		return
+	case commandImageCustom:
+		dbBodyReq := NewDBBodyRequest(g.cfg.DreamBooth.Key, text)
+		reqBody, err = dbBodyReq.MarshalJSON()
+		if err != nil {
+			return
+		}
+		result, err = g.dreamBoothAPI.TextToImage(reqBody)
 		isFile = true
 		return
 	}
