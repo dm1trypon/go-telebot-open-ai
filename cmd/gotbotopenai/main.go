@@ -11,8 +11,6 @@ import (
 	"github.com/dm1trypon/go-telebot-open-ai/internal/gotbotopenai"
 )
 
-// 6339322764:AAGXPnK3BDqYKRuvXP6JUghl4ffh5xkaV4A
-// 5930839504:AAEKsOufyhnQuwL3kOTJJQyHzJnJqAWY0GU
 func main() {
 	cfg, err := gotbotopenai.NewConfig()
 	if err != nil {
