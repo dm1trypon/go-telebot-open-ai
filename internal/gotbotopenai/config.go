@@ -19,6 +19,7 @@ type Config struct {
 	DreamBooth     DreamBoothSettings
 	Logger         zap.Config
 	LenMessageChan int
+	MaxClientsJobs int
 }
 
 type TelegramSettings struct {
@@ -29,15 +30,15 @@ type TelegramSettings struct {
 }
 
 type ChatGPTSettings struct {
-	Tokens       map[string]struct{}
-	RetryRequest int
-	RetryTimeout int // seconds
+	Tokens        map[string]struct{}
+	RetryRequest  int
+	RetryInterval int // seconds
 }
 
 type DreamBoothSettings struct {
-	Key          string
-	RetryCount   int
-	RetryTimeout int
+	Key           string
+	RetryCount    int
+	RetryInterval int
 }
 
 func NewConfig() (*Config, error) {
@@ -83,7 +84,7 @@ func NewConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	chatGPTRetryTimeout, err := strconv.Atoi(os.Getenv("CHAT_GPT_RETRY_TIMEOUT"))
+	chatGPTRetryInterval, err := strconv.Atoi(os.Getenv("CHAT_GPT_RETRY_INTERVAL"))
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +92,11 @@ func NewConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	dreamBoothRetryTimeout, err := strconv.Atoi(os.Getenv("DREAMBOOTH_RETRY_TIMEOUT"))
+	dreamBoothRetryInterval, err := strconv.Atoi(os.Getenv("DREAMBOOTH_RETRY_INTERVAL"))
+	if err != nil {
+		return nil, err
+	}
+	maxClientsJobs, err := strconv.Atoi(os.Getenv("MAX_CLIENTS_JOBS"))
 	if err != nil {
 		return nil, err
 	}
@@ -103,25 +108,26 @@ func NewConfig() (*Config, error) {
 			ReconnectInterval: telegramReconnectInterval,
 		},
 		ChatGPT: ChatGPTSettings{
-			Tokens:       tokensMap,
-			RetryRequest: chatGPTRetryRequest,
-			RetryTimeout: chatGPTRetryTimeout,
+			Tokens:        tokensMap,
+			RetryRequest:  chatGPTRetryRequest,
+			RetryInterval: chatGPTRetryInterval,
 		},
 		DreamBooth: DreamBoothSettings{
-			Key:          os.Getenv("DREAMBOOTH_KEY"),
-			RetryCount:   dreamBoothRetryCount,
-			RetryTimeout: dreamBoothRetryTimeout,
+			Key:           os.Getenv("DREAMBOOTH_KEY"),
+			RetryCount:    dreamBoothRetryCount,
+			RetryInterval: dreamBoothRetryInterval,
 		},
-		Logger:         newLogger(),
+		Logger:         newLogger(logOutputPath),
 		LenMessageChan: lenMessageChan,
+		MaxClientsJobs: maxClientsJobs,
 	}, nil
 }
 
-func newLogger() zap.Config {
+func newLogger(logOutputPath string) zap.Config {
 	zapCfg := zap.NewDevelopmentConfig()
 	zapCfg.Level.SetLevel(getLogLevel())
 	zapCfg.Encoding = "json"
-	zapCfg.OutputPaths = []string{os.Getenv("LOG_OUTPUT_PATH")}
+	zapCfg.OutputPaths = []string{logOutputPath}
 	zapCfg.EncoderConfig = zap.NewDevelopmentEncoderConfig()
 	zapCfg.EncoderConfig.MessageKey = "msg"
 	zapCfg.EncoderConfig.LevelKey = "level"
