@@ -3,11 +3,10 @@ package gotbotopenai
 import (
 	"bytes"
 	"context"
+	"errors"
 	"sync"
 
 	"go.uber.org/zap"
-
-	"github.com/dm1trypon/go-telebot-open-ai/pkg/strgen"
 )
 
 const (
@@ -21,42 +20,123 @@ const (
 	commandImageCustomExample = "imageCustomExample"
 	commandHelp               = "help"
 
-	lenGenImageName    = 16
-	formatGenImageName = ".jpeg"
+	resolution256x256   = "256x256"
+	resolution512x512   = "512x512"
+	resolution1024x1024 = "1024x1024"
 )
 
-type commandByChatID struct {
-	value map[int64]string
+var respBodyByCmd = map[string]string{
+	commandStart:              respBodySessionCreated,
+	commandStop:               respBodySessionRemoved,
+	commandText:               respBodyCommandText,
+	commandImageSize256x256:   respBodyCommandImage(resolution256x256),
+	commandImageSize512x512:   respBodyCommandImage(resolution512x512),
+	commandImageSize1024x1024: respBodyCommandImage(resolution1024x1024),
+	commandImageCustom:        respBodyCommandImageCustom,
+	commandImageCustomExample: respBodyCommandImageCustomExample,
+	commandHelp:               respBodyCommandHelp,
+}
+
+var respErrBodyByCmd = map[string]string{
+	commandText:               respErrBodyCommandText,
+	commandImageSize256x256:   respErrBodyCommandImage,
+	commandImageSize512x512:   respErrBodyCommandImage,
+	commandImageSize1024x1024: respErrBodyCommandImage,
+}
+
+var resolutionByImgCommand = map[string]string{
+	commandImageSize256x256:   resolution256x256,
+	commandImageSize512x512:   resolution512x512,
+	commandImageSize1024x1024: resolution1024x1024,
+}
+
+type tClient struct {
+	curCmd  string
+	curJobs int
+}
+
+type tClientByChatID struct {
+	value map[int64]*tClient
 	mutex sync.RWMutex
 }
 
-func (c *commandByChatID) SetCurrentCommand(chatID int64, command string) {
-	defer c.mutex.Unlock()
-	c.mutex.Lock()
-	c.value[chatID] = command
+func (t *tClientByChatID) SetClientCurrentCommand(chatID int64, command string) {
+	defer t.mutex.Unlock()
+	t.mutex.Lock()
+	tc, ok := t.value[chatID]
+	if !ok || tc == nil {
+		t.value[chatID] = &tClient{command, 0}
+		return
+	}
+	tc.curCmd = command
 }
 
-func (c *commandByChatID) CurrentCommand(chatID int64) string {
-	defer c.mutex.RUnlock()
-	c.mutex.RLock()
-	return c.value[chatID]
+func (t *tClientByChatID) IncrementClientCurrentJobs(chatID int64) error {
+	defer t.mutex.Unlock()
+	t.mutex.Lock()
+	tc, ok := t.value[chatID]
+	if !ok || tc == nil {
+		return errors.New("client with current chatID does not exist")
+	}
+	tc.curJobs++
+	return nil
 }
 
-func (c *commandByChatID) DeleteCurrentCommand(chatID int64) {
-	defer c.mutex.Unlock()
-	c.mutex.Lock()
-	delete(c.value, chatID)
+func (t *tClientByChatID) DecrementClientCurrentJobs(chatID int64) error {
+	defer t.mutex.Unlock()
+	t.mutex.Lock()
+	tc, ok := t.value[chatID]
+	if !ok || tc == nil {
+		return errors.New("client with current chatID does not exist")
+	}
+	if tc.curJobs == 0 {
+		return errors.New("current jobs can not less than 0")
+	}
+	tc.curJobs--
+	return nil
+}
+
+func (t *tClientByChatID) ClientCurrentJobs(chatID int64) (int, error) {
+	defer t.mutex.RUnlock()
+	t.mutex.RLock()
+	tc, ok := t.value[chatID]
+	if !ok || tc == nil {
+		return -1, errors.New("client with current chatID does not exist")
+	}
+	return tc.curJobs, nil
+}
+
+func (t *tClientByChatID) ClientCurrentCommand(chatID int64) (string, error) {
+	defer t.mutex.RUnlock()
+	t.mutex.RLock()
+	tc, ok := t.value[chatID]
+	if !ok || tc == nil {
+		return "", errors.New("client with current chatID does not exist")
+	}
+	return tc.curCmd, nil
+}
+
+func (t *tClientByChatID) AddClient(chatID int64) {
+	defer t.mutex.Unlock()
+	t.mutex.Lock()
+	t.value[chatID] = new(tClient)
+}
+
+func (t *tClientByChatID) DeleteClient(chatID int64) {
+	defer t.mutex.Unlock()
+	t.mutex.Lock()
+	delete(t.value, chatID)
 }
 
 type GoTBotOpenAI struct {
-	cfg             *Config
-	botClient       BotClient
-	chatGPT         *ChatGPT
-	dreamBoothAPI   *DreamBoothAPI
-	commandByChatID commandByChatID
-	log             *zap.Logger
-	msgChan         chan *message
-	quitChan        chan<- struct{}
+	cfg           *Config
+	botClient     BotClient
+	chatGPT       *ChatGPT
+	dreamBoothAPI *DreamBoothAPI
+	tClients      tClientByChatID
+	log           *zap.Logger
+	msgChan       chan *message
+	quitChan      chan<- struct{}
 }
 
 func NewGoTBotOpenAI(cfg *Config, log *zap.Logger) (*GoTBotOpenAI, error) {
@@ -67,14 +147,14 @@ func NewGoTBotOpenAI(cfg *Config, log *zap.Logger) (*GoTBotOpenAI, error) {
 		return nil, err
 	}
 	return &GoTBotOpenAI{
-		cfg:             cfg,
-		botClient:       telegram,
-		chatGPT:         NewChatGPT(&cfg.ChatGPT),
-		dreamBoothAPI:   NewDreamBoothAPI(log, &cfg.DreamBooth),
-		commandByChatID: commandByChatID{value: make(map[int64]string)},
-		log:             log,
-		msgChan:         msgChan,
-		quitChan:        quitChan,
+		cfg:           cfg,
+		botClient:     telegram,
+		chatGPT:       NewChatGPT(&cfg.ChatGPT),
+		dreamBoothAPI: NewDreamBoothAPI(log, &cfg.DreamBooth),
+		tClients:      tClientByChatID{value: make(map[int64]*tClient)},
+		log:           log,
+		msgChan:       msgChan,
+		quitChan:      quitChan,
 	}, nil
 }
 
@@ -109,12 +189,12 @@ func (g *GoTBotOpenAI) processMessage(msg *message, token string) {
 	}
 	var (
 		respBody bytes.Buffer
-		isFile   bool
+		fileName string
 		err      error
 	)
 	defer func() {
-		if isFile {
-			err = g.botClient.ReplyFile(msg.messageID, msg.chatID, respBody.Bytes(), strgen.Generate(lenGenImageName)+formatGenImageName)
+		if fileName != "" {
+			err = g.botClient.ReplyFile(msg.messageID, msg.chatID, respBody.Bytes(), fileName)
 		} else {
 			err = g.botClient.ReplyText(msg.messageID, msg.chatID, respBody.String())
 		}
@@ -123,144 +203,100 @@ func (g *GoTBotOpenAI) processMessage(msg *message, token string) {
 		}
 		respBody.Reset()
 	}()
-	g.switchCommands(&respBody, msg)
+	g.checkClientSession(&respBody, msg.command, msg.chatID)
 	if respBody.Len() > 0 {
 		return
 	}
-	isFile = g.processTextMessage(&respBody, token, msg.text, msg.chatID)
-}
-
-func (g *GoTBotOpenAI) switchCommands(respBody *bytes.Buffer, msg *message) {
-	if msg.command == "" {
+	g.switchCommands(&respBody, msg.command, msg.chatID)
+	if respBody.Len() > 0 {
 		return
 	}
-	switch msg.command {
-	case commandStart:
-		if g.commandByChatID.CurrentCommand(msg.chatID) != "" {
-			respBody.WriteString("Сессия с ботом уже активна. Чтобы посмотреть описание команд, введите команду /help.")
-			return
-		}
-		g.commandByChatID.SetCurrentCommand(msg.chatID, msg.command)
-		respBody.WriteString("Сессия с ботом активна. Чтобы посмотреть описание команд, введите команду /help.")
+	g.checkClientJobs(&respBody, msg.chatID)
+	if respBody.Len() > 0 {
 		return
-	case commandStop:
-		if g.commandByChatID.CurrentCommand(msg.chatID) == "" {
-			respBody.WriteString("Сессия с ботом не активна. Чтобы начать сессию с ботом, введите команду /start. Чтобы посмотреть описание команд, введите команду /help.")
-			return
-		}
-		g.commandByChatID.DeleteCurrentCommand(msg.chatID)
-		respBody.WriteString("Сессия с ботом завершена. Возвращайтесь!")
-		return
-	case commandText:
-		if g.commandByChatID.CurrentCommand(msg.chatID) == "" {
-			respBody.WriteString("Сессия с ботом не активна. Чтобы начать сессию с ботом, введите команду /start. Чтобы посмотреть описание команд, введите команду /help.")
-			return
-		}
-		g.commandByChatID.SetCurrentCommand(msg.chatID, msg.command)
-		respBody.WriteString("Выбрана генерация текста. Введите запрос как можно подробнее, чтобы получить наиболее удовлетворительный сгенерированный текстовый ответ.")
-		return
-	case commandImageSize256x256:
-		if g.commandByChatID.CurrentCommand(msg.chatID) == "" {
-			respBody.WriteString("Сессия с ботом не активна. Чтобы начать сессию с ботом, введите команду /start. Чтобы посмотреть описание команд, введите команду /help.")
-			return
-		}
-		g.commandByChatID.SetCurrentCommand(msg.chatID, msg.command)
-		respBody.WriteString("Выбрана генерация изображений размером 256x256. Введите запрос как можно подробнее, чтобы получить наиболее удовлетворительное сгенерированное изображение.")
-		return
-	case commandImageSize512x512:
-		if g.commandByChatID.CurrentCommand(msg.chatID) == "" {
-			respBody.WriteString("Сессия с ботом не активна. Чтобы начать сессию с ботом, введите команду /start. Чтобы посмотреть описание команд, введите команду /help.")
-			return
-		}
-		g.commandByChatID.SetCurrentCommand(msg.chatID, msg.command)
-		respBody.WriteString("Выбрана генерация изображений размером 512x512. Введите запрос как можно подробнее, чтобы получить наиболее удовлетворительное сгенерированное изображение.")
-		return
-	case commandImageSize1024x1024:
-		if g.commandByChatID.CurrentCommand(msg.chatID) == "" {
-			respBody.WriteString("Сессия с ботом не активна. Чтобы начать сессию с ботом, введите команду /start. Чтобы посмотреть описание команд, введите команду /help.")
-			return
-		}
-		g.commandByChatID.SetCurrentCommand(msg.chatID, msg.command)
-		respBody.WriteString("Выбрана генерация изображений размером 1024x1024. Введите запрос как можно подробнее, чтобы получить наиболее удовлетворительное сгенерированное изображение.")
-		return
-	case commandImageCustom:
-		if g.commandByChatID.CurrentCommand(msg.chatID) == "" {
-			respBody.WriteString("Сессия с ботом не активна. Чтобы начать сессию с ботом, введите команду /start. Чтобы посмотреть описание команд, введите команду /help.")
-			return
-		}
-		g.commandByChatID.SetCurrentCommand(msg.chatID, msg.command)
-		respBody.WriteString("Выбрана пользовательская генерация изображений. Введите запрос как можно подробнее, чтобы получить наиболее удовлетворительное сгенерированное изображение.")
-		return
-	case commandHelp:
-		respBody.WriteString(`Доступные команды бота:
-/start - начало сессии с ботом
-/stop - завершение сессии с ботом
-/image256x256 - генерация изображений размером 256x256, используя модель OpenAI DALL·E
-/image512x512 - генерация изображений размером 512x512, используя модель OpenAI DALL·E
-/image1024x1024 - генерация изображений размером 1024x1024, используя модель OpenAI DALL·E
-/imageCustom - генерация изображений, используя разные модели и более точные настройки. Описание доступных полей https://stablediffusionapi.com/docs/community-models-api-v4/dreamboothtext2img#body-attributes.
-/imageCustomExample - пример промта для генерации изображения с кастомными моделями и настройками.
-/text - генерация текста, используя модель OpenAI gpt-4-32k-0613.`)
-	case commandImageCustomExample:
-		respBody.WriteString(`prompt: Iron Man, (Arnold Tsang, Toru Nakayama), Masterpiece, Studio Quality, 6k , toa, toaair, 1boy, glowing, axe, mecha, science_fiction, solo, weapon, jungle , green_background, nature, outdoors, solo, tree, weapon, mask, dynamic lighting, detailed shading, digital texture painting
-negative_prompt: un-detailed skin, semi-realistic, cgi, 3d, render, sketch, cartoon, drawing, ugly eyes, (out of frame:1.3), worst quality, low quality, jpeg artifacts, cgi, sketch, cartoon, drawing, (out of frame:1.1)
-width: 512
-height: 512
-model_id: midjourney
-`)
+	}
+	fileName = g.processTextMessage(&respBody, token, msg.text, msg.chatID)
+}
+
+func (g *GoTBotOpenAI) checkClientSession(respBody *bytes.Buffer, command string, chatID int64) {
+	curCmd, err := g.tClients.ClientCurrentCommand(chatID)
+	switch {
+	case (curCmd == "" || err != nil) && (command == "" || (command != commandStart && command != commandHelp)):
+		respBody.WriteString(respBodySessionIsNotExist)
+	case curCmd != "" && command == commandStart:
+		respBody.WriteString(respBodySessionAlreadyExist)
 	}
 }
 
-func (g *GoTBotOpenAI) processTextMessage(respBody *bytes.Buffer, token, text string, chatID int64) (isFile bool) {
-	if g.commandByChatID.CurrentCommand(chatID) == "" {
-		respBody.WriteString("Сессия с ботом не активна. Чтобы начать сессию с ботом, введите команду /start. Чтобы посмотреть описание команд, введите команду /help.")
+func (g *GoTBotOpenAI) checkClientJobs(respBody *bytes.Buffer, chatID int64) {
+	jobs, err := g.tClients.ClientCurrentJobs(chatID)
+	if err != nil {
+		respBody.WriteString(respBodySessionIsNotExist)
 		return
 	}
+	if jobs >= 1 {
+		respBody.WriteString(respBodyLimitJobs)
+	}
+}
+
+func (g *GoTBotOpenAI) switchCommands(respBody *bytes.Buffer, command string, chatID int64) {
+	if command == "" {
+		return
+	}
+	body, ok := respBodyByCmd[command]
+	if !ok {
+		respBody.WriteString(respBodyUndefinedCommand)
+		return
+	}
+	if command == commandStop {
+		g.tClients.DeleteClient(chatID)
+	} else if command != commandImageCustomExample && command != commandHelp {
+		g.tClients.SetClientCurrentCommand(chatID, command)
+	}
+	respBody.WriteString(body)
+}
+
+func (g *GoTBotOpenAI) processTextMessage(respBody *bytes.Buffer, token, text string, chatID int64) (fileName string) {
 	var (
-		reqBody, result []byte
-		err             error
+		result []byte
+		err    error
 	)
-	command := g.commandByChatID.CurrentCommand(chatID)
+	command, err := g.tClients.ClientCurrentCommand(chatID)
+	if err != nil {
+		g.log.Error("Get client current command error:", zap.Error(err))
+		respBody.WriteString(respBodySessionIsNotExist)
+		return
+	}
+	if err = g.tClients.IncrementClientCurrentJobs(chatID); err != nil {
+		g.log.Error("Increment client current jobs error:", zap.Error(err))
+		respBody.WriteString(respBodySessionIsNotExist)
+		return
+	}
 	defer func() {
 		if err != nil {
 			g.log.Error("OpenAI generation error:", zap.Error(err))
-			if command == commandImageCustom {
-				respBody.WriteString("Увы, но изображение так и не сгенерировалось. Возможно, некоторые параметры были подобраны неправильно, либо запрос не удовлетворяет политике работы с OpenAI https://openai.com/policies/usage-policies, или же сервис попросту перегружен. Попробуйте переформулировать запрос и отправить его чуть позже.")
-			} else {
-				respBody.WriteString("Запрос не удовлетворяет политике работы с OpenAI https://openai.com/policies/usage-policies. Пожалуйста, переформулируйте запрос.")
+			if body, ok := respErrBodyByCmd[command]; ok {
+				respBody.WriteString(body)
+			} else if command == commandImageCustom {
+				respBody.WriteString(respErrBodyCommandImageCustom(err))
 			}
-			isFile = false
-			return
+		} else {
+			respBody.Write(result)
 		}
-		respBody.Write(result)
+		if err = g.tClients.DecrementClientCurrentJobs(chatID); err != nil {
+			g.log.Error("Decrement client current jobs error:", zap.Error(err))
+		}
 	}()
 	ctx := context.Background()
 	switch command {
 	case commandText:
 		result, err = g.chatGPT.GenerateText(ctx, token, text)
-		return
-	case commandImageSize256x256:
-		result, err = g.chatGPT.GenerateImage(ctx, token, text, 1)
-		isFile = true
-		return
-	case commandImageSize512x512:
-		result, err = g.chatGPT.GenerateImage(ctx, token, text, 2)
-		isFile = true
-		return
-	case commandImageSize1024x1024:
-		result, err = g.chatGPT.GenerateImage(ctx, token, text, 3)
-		isFile = true
-		return
+	case commandImageSize256x256, commandImageSize512x512, commandImageSize1024x1024:
+		result, fileName, err = g.chatGPT.GenerateImage(ctx, token, text, resolutionByImgCommand[command])
 	case commandImageCustom:
-		dbBodyReq := NewDBBodyRequest(g.cfg.DreamBooth.Key, text)
-		reqBody, err = dbBodyReq.MarshalJSON()
-		if err != nil {
-			return
-		}
-		result, err = g.dreamBoothAPI.TextToImage(reqBody)
-		isFile = true
-		return
+		result, fileName, err = g.dreamBoothAPI.TextToImage(ctx, NewSerializedDBBodyRequest(g.cfg.DreamBooth.Key, text))
+	default:
+		result = []byte(respBodyUndefinedGeneration)
 	}
-	respBody.WriteString("Не выбрано, что генерировать: текст или изображение. Чтобы посмотреть описание команд, введите команду /help.")
 	return
 }

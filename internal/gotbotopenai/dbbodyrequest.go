@@ -29,7 +29,7 @@ type DBBodyRequest struct {
 	scheduler         string
 }
 
-func NewDBBodyRequest(key, body string) *DBBodyRequest {
+func NewSerializedDBBodyRequest(key, body string) []byte {
 	dbBodyReq := &DBBodyRequest{
 		key:               key,
 		modelID:           "midjourney",
@@ -52,51 +52,7 @@ func NewDBBodyRequest(key, body string) *DBBodyRequest {
 		scheduler:         "UniPCMultistepScheduler",
 	}
 	dbBodyReq.fillChangedFields(body)
-	return dbBodyReq
-}
-
-func (d *DBBodyRequest) MarshalJSON() ([]byte, error) {
-	var b bytes.Buffer
-	b.WriteString(`{"key":"`)
-	b.WriteString(d.key)
-	b.WriteString(`","model_id":"`)
-	b.WriteString(d.modelID)
-	b.WriteString(`","prompt":"`)
-	b.WriteString(d.prompt)
-	b.WriteString(`","negative_prompt":"`)
-	b.WriteString(d.negativePrompt)
-	b.WriteString(`","width":"`)
-	b.WriteString(d.width)
-	b.WriteString(`","height":"`)
-	b.WriteString(d.height)
-	b.WriteString(`","samples":"`)
-	b.WriteString(d.samples)
-	b.WriteString(`","num_inference_steps":"`)
-	b.WriteString(d.negativePrompt)
-	b.WriteString(`","safety_checker":"`)
-	b.WriteString(d.safetyChecker)
-	b.WriteString(`","enhance_prompt":"`)
-	b.WriteString(d.enhancePrompt)
-	b.WriteString(`","guidance_scale":`)
-	b.WriteString(strconv.FormatFloat(d.guidanceScale, 'f', 2, 64))
-	b.WriteString(`,"multi_lingual":"`)
-	b.WriteString(d.multiLingual)
-	b.WriteString(`","panorama":"`)
-	b.WriteString(d.panorama)
-	b.WriteString(`","self_attention":"`)
-	b.WriteString(d.selfAttention)
-	b.WriteString(`","upscale":"`)
-	b.WriteString(d.upscale)
-	b.WriteString(`","tomesd":"`)
-	b.WriteString(d.tomesd)
-	b.WriteString(`","clip_skip":"`)
-	b.WriteString(d.clipSkip)
-	b.WriteString(`","use_karras_sigmas":"`)
-	b.WriteString(d.useKarrasSigmas)
-	b.WriteString(`","scheduler":"`)
-	b.WriteString(d.scheduler)
-	b.WriteString(`"}`)
-	return b.Bytes(), nil
+	return dbBodyReq.serialize()
 }
 
 func (d *DBBodyRequest) fillChangedFields(body string) {
@@ -151,4 +107,48 @@ func (d *DBBodyRequest) fillChangedFields(body string) {
 			d.scheduler = val
 		}
 	}
+}
+
+func (d *DBBodyRequest) serialize() []byte {
+	var b bytes.Buffer
+	b.WriteString(`{"key":"`)
+	b.WriteString(d.key)
+	b.WriteString(`","model_id":"`)
+	b.WriteString(d.modelID)
+	b.WriteString(`","prompt":"`)
+	b.WriteString(d.prompt)
+	b.WriteString(`","negative_prompt":"`)
+	b.WriteString(d.negativePrompt)
+	b.WriteString(`","width":"`)
+	b.WriteString(d.width)
+	b.WriteString(`","height":"`)
+	b.WriteString(d.height)
+	b.WriteString(`","samples":"`)
+	b.WriteString(d.samples)
+	b.WriteString(`","num_inference_steps":"`)
+	b.WriteString(d.negativePrompt)
+	b.WriteString(`","safety_checker":"`)
+	b.WriteString(d.safetyChecker)
+	b.WriteString(`","enhance_prompt":"`)
+	b.WriteString(d.enhancePrompt)
+	b.WriteString(`","guidance_scale":`)
+	b.WriteString(strconv.FormatFloat(d.guidanceScale, 'f', 2, 64))
+	b.WriteString(`,"multi_lingual":"`)
+	b.WriteString(d.multiLingual)
+	b.WriteString(`","panorama":"`)
+	b.WriteString(d.panorama)
+	b.WriteString(`","self_attention":"`)
+	b.WriteString(d.selfAttention)
+	b.WriteString(`","upscale":"`)
+	b.WriteString(d.upscale)
+	b.WriteString(`","tomesd":"`)
+	b.WriteString(d.tomesd)
+	b.WriteString(`","clip_skip":"`)
+	b.WriteString(d.clipSkip)
+	b.WriteString(`","use_karras_sigmas":"`)
+	b.WriteString(d.useKarrasSigmas)
+	b.WriteString(`","scheduler":"`)
+	b.WriteString(d.scheduler)
+	b.WriteString(`"}`)
+	return b.Bytes()
 }
