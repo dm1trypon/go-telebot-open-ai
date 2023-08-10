@@ -2,6 +2,7 @@ package gotbotopenai
 
 import (
 	"errors"
+	"github.com/dm1trypon/go-telebot-open-ai/pkg/gdapi"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -17,6 +18,7 @@ type Config struct {
 	Telegram       TelegramSettings
 	ChatGPT        ChatGPTSettings
 	DreamBooth     DreamBoothSettings
+	GoogleDriveAPI GoogleDriveAPI
 	Logger         zap.Config
 	LenMessageChan int
 	MaxClientsJobs int
@@ -36,9 +38,15 @@ type ChatGPTSettings struct {
 }
 
 type DreamBoothSettings struct {
-	Key           string
-	RetryCount    int
-	RetryInterval int
+	ConfigFileName string
+	RetryCount     int
+	RetryInterval  int
+}
+
+type GoogleDriveAPI struct {
+	CredentialsSettings gdapi.CredentialsSettings
+	TokenSettings       gdapi.TokenSettings
+	Timeout             int
 }
 
 func NewConfig() (*Config, error) {
@@ -100,6 +108,10 @@ func NewConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	gdAPITimeout, err := strconv.Atoi(os.Getenv("GD_API_TIMEOUT"))
+	if err != nil {
+		return nil, err
+	}
 	return &Config{
 		Telegram: TelegramSettings{
 			Token:             os.Getenv("TELEGRAM_TOKEN"),
@@ -113,9 +125,26 @@ func NewConfig() (*Config, error) {
 			RetryInterval: chatGPTRetryInterval,
 		},
 		DreamBooth: DreamBoothSettings{
-			Key:           os.Getenv("DREAMBOOTH_KEY"),
-			RetryCount:    dreamBoothRetryCount,
-			RetryInterval: dreamBoothRetryInterval,
+			ConfigFileName: os.Getenv("DREAMBOOTH_CONFIG_FILENAME"),
+			RetryCount:     dreamBoothRetryCount,
+			RetryInterval:  dreamBoothRetryInterval,
+		},
+		GoogleDriveAPI: GoogleDriveAPI{
+			CredentialsSettings: gdapi.CredentialsSettings{
+				ClientID:                os.Getenv("GD_CLIENT_ID"),
+				ProjectID:               os.Getenv("GD_PROJECT_ID"),
+				AuthURI:                 os.Getenv("GD_AUTH_URI"),
+				TokenURI:                os.Getenv("GD_TOKEN_URI"),
+				AuthProviderX509CertURL: os.Getenv("GD_AUTH_PROVIDER_X509_CERT_URL"),
+				ClientSecret:            os.Getenv("GD_CLIENT_SECRET"),
+			},
+			TokenSettings: gdapi.TokenSettings{
+				AccessToken:  os.Getenv("GD_ACCESS_TOKEN"),
+				TokenType:    os.Getenv("GD_TOKEN_TYPE"),
+				RefreshToken: os.Getenv("GD_REFRESH_TOKEN"),
+				Expiry:       os.Getenv("GD_EXPIRY"),
+			},
+			Timeout: gdAPITimeout,
 		},
 		Logger:         newLogger(logOutputPath),
 		LenMessageChan: lenMessageChan,

@@ -3,9 +3,12 @@ package gotbotopenai
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"sync"
+	"sync/atomic"
 
+	"github.com/dm1trypon/go-telebot-open-ai/pkg/gdapi"
 	"go.uber.org/zap"
 )
 
@@ -135,6 +138,8 @@ type GoTBotOpenAI struct {
 	dreamBoothAPI *DreamBoothAPI
 	tClients      tClientByChatID
 	log           *zap.Logger
+	dbKeys        []string
+	lastIDDBKey   int64
 	msgChan       chan *message
 	quitChan      chan<- struct{}
 }
@@ -146,6 +151,10 @@ func NewGoTBotOpenAI(cfg *Config, log *zap.Logger) (*GoTBotOpenAI, error) {
 	if err != nil {
 		return nil, err
 	}
+	dbKeys, err := getDreamBoothKeys(&cfg.GoogleDriveAPI, cfg.DreamBooth.ConfigFileName, cfg.GoogleDriveAPI.Timeout)
+	if err != nil {
+		return nil, err
+	}
 	return &GoTBotOpenAI{
 		cfg:           cfg,
 		botClient:     telegram,
@@ -153,6 +162,7 @@ func NewGoTBotOpenAI(cfg *Config, log *zap.Logger) (*GoTBotOpenAI, error) {
 		dreamBoothAPI: NewDreamBoothAPI(log, &cfg.DreamBooth),
 		tClients:      tClientByChatID{value: make(map[int64]*tClient)},
 		log:           log,
+		dbKeys:        dbKeys,
 		msgChan:       msgChan,
 		quitChan:      quitChan,
 	}, nil
@@ -294,9 +304,42 @@ func (g *GoTBotOpenAI) processTextMessage(respBody *bytes.Buffer, token, text st
 	case commandImageSize256x256, commandImageSize512x512, commandImageSize1024x1024:
 		result, fileName, err = g.chatGPT.GenerateImage(ctx, token, text, resolutionByImgCommand[command])
 	case commandImageCustom:
-		result, fileName, err = g.dreamBoothAPI.TextToImage(ctx, NewSerializedDBBodyRequest(g.cfg.DreamBooth.Key, text))
+		var (
+			idx        int64
+			retryCount int
+		)
+		lastIDDBKey := atomic.LoadInt64(&g.lastIDDBKey)
+		for idx = lastIDDBKey; idx < int64(len(g.dbKeys)); idx++ {
+			retryCount++
+			result, fileName, err = g.dreamBoothAPI.TextToImage(text, g.dbKeys[idx])
+			if err == nil || !errors.Is(err, errDBMonthLimit) || retryCount == g.cfg.DreamBooth.RetryCount {
+				if idx != lastIDDBKey {
+					atomic.StoreInt64(&g.lastIDDBKey, idx)
+				}
+				break
+			}
+			if idx == int64(len(g.dbKeys))-1 {
+				idx = 0
+			}
+		}
 	default:
 		result = []byte(respBodyUndefinedGeneration)
 	}
 	return
+}
+
+func getDreamBoothKeys(cfg *GoogleDriveAPI, cfgFileName string, timeout int) ([]string, error) {
+	g, err := gdapi.NewGoogleDriveAPI(cfg.CredentialsSettings, cfg.TokenSettings, timeout)
+	if err != nil {
+		return nil, err
+	}
+	dbCfg, err := g.Download(cfgFileName)
+	if err != nil {
+		return nil, err
+	}
+	var dbKeys []string
+	if err = json.Unmarshal(dbCfg, &dbKeys); err != nil {
+		return nil, err
+	}
+	return dbKeys, nil
 }
