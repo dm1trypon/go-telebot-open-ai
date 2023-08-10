@@ -43,7 +43,7 @@ func NewDreamBoothAPI(log *zap.Logger, cfg *DreamBoothSettings) *DreamBoothAPI {
 }
 
 // TextToImage - https://stablediffusionapi.com/docs/community-models-api-v4/dreamboothtext2img
-func (d *DreamBoothAPI) TextToImage(text string, key string) ([]byte, string, error) {
+func (d *DreamBoothAPI) TextToImage(text, key string) ([]byte, string, error) {
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req)
 	resp := fasthttp.AcquireResponse()
