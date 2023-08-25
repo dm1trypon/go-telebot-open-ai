@@ -2,14 +2,15 @@ package gotbotopenai
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"sync"
 	"sync/atomic"
 
-	"github.com/dm1trypon/go-telebot-open-ai/pkg/gdapi"
 	"go.uber.org/zap"
+
+	"github.com/dm1trypon/go-telebot-open-ai/pkg/chatgptfree"
+	"github.com/dm1trypon/go-telebot-open-ai/pkg/gdapi"
 )
 
 const (
@@ -32,19 +33,13 @@ var respBodyByCmd = map[string]string{
 	commandStart:              respBodySessionCreated,
 	commandStop:               respBodySessionRemoved,
 	commandText:               respBodyCommandText,
-	commandImageSize256x256:   respBodyCommandImage(resolution256x256),
-	commandImageSize512x512:   respBodyCommandImage(resolution512x512),
-	commandImageSize1024x1024: respBodyCommandImage(resolution1024x1024),
 	commandImageCustom:        respBodyCommandImageCustom,
 	commandImageCustomExample: respBodyCommandImageCustomExample,
 	commandHelp:               respBodyCommandHelp,
 }
 
 var respErrBodyByCmd = map[string]string{
-	commandText:               respErrBodyCommandText,
-	commandImageSize256x256:   respErrBodyCommandImage,
-	commandImageSize512x512:   respErrBodyCommandImage,
-	commandImageSize1024x1024: respErrBodyCommandImage,
+	commandText: respErrBodyCommandText,
 }
 
 var resolutionByImgCommand = map[string]string{
@@ -297,12 +292,9 @@ func (g *GoTBotOpenAI) processTextMessage(respBody *bytes.Buffer, token, text st
 			g.log.Error("Decrement client current jobs error:", zap.Error(err))
 		}
 	}()
-	ctx := context.Background()
 	switch command {
 	case commandText:
-		result, err = g.chatGPT.GenerateText(ctx, token, text)
-	case commandImageSize256x256, commandImageSize512x512, commandImageSize1024x1024:
-		result, fileName, err = g.chatGPT.GenerateImage(ctx, token, text, resolutionByImgCommand[command])
+		result, err = chatgptfree.Text(text, 100000)
 	case commandImageCustom:
 		var (
 			idx        int64
