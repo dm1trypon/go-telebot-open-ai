@@ -1,8 +1,8 @@
 package chatgptfree
 
 import (
+	"context"
 	"errors"
-	"time"
 
 	"github.com/valyala/fasthttp"
 )
@@ -11,7 +11,7 @@ const chatGPTTextURL = "https://chatgptbot.ru/gptbot.php"
 
 var errResponseCodeIsNot200 = errors.New("response code is not 200")
 
-func Text(message string, timeout int) ([]byte, error) {
+func GenerateText(ctx context.Context, prompt string) ([]byte, error) {
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req)
 	resp := fasthttp.AcquireResponse()
@@ -33,7 +33,7 @@ func Text(message string, timeout int) ([]byte, error) {
 	req.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
 	req.Header.Set("x-requested-with", "XMLHttpRequest")
 	req.PostArgs().Set("engine", "gpt-3.5-turbo")
-	req.PostArgs().Set("prompt", message)
+	req.PostArgs().Set("prompt", prompt)
 	req.PostArgs().Set("temperature", "0.6")
 	req.PostArgs().Set("max_tokens", "3159")
 	req.PostArgs().Set("top_p", "1")
@@ -42,12 +42,26 @@ func Text(message string, timeout int) ([]byte, error) {
 	req.PostArgs().Set("n", "1")
 	req.PostArgs().Set("stop[]", "Human:")
 	req.PostArgs().Set("messages[0][role]", "user")
-	req.PostArgs().Set("messages[0][content]", message)
-	if err := fasthttp.DoTimeout(req, resp, time.Duration(timeout)*time.Millisecond); err != nil {
+	req.PostArgs().Set("messages[0][content]", prompt)
+	bodyChan := make(chan []byte, 1)
+	errChan := make(chan error, 1)
+	go func() {
+		if err := fasthttp.Do(req, resp); err != nil {
+			errChan <- err
+			return
+		}
+		if resp.StatusCode() != fasthttp.StatusOK {
+			errChan <- errResponseCodeIsNot200
+			return
+		}
+		bodyChan <- resp.Body()
+	}()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case body := <-bodyChan:
+		return body, nil
+	case err := <-errChan:
 		return nil, err
 	}
-	if resp.StatusCode() != fasthttp.StatusOK {
-		return nil, errResponseCodeIsNot200
-	}
-	return resp.Body(), nil
 }

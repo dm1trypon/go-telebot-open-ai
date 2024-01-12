@@ -1,12 +1,14 @@
-package gotbotopenai
+package tbotopenai
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"net/url"
 	"path"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/valyala/fasthttp"
@@ -32,18 +34,48 @@ const (
 	dbFetchURL = "https://stablediffusionapi.com/api/v4/dreambooth/fetch/"
 )
 
-type DreamBoothAPI struct {
+const (
+	dbStatusProcessing = "processing"
+	dbStatusError      = "error"
+)
+
+type DreamBooth struct {
 	log          *zap.Logger
 	retryCount   int
 	retryTimeout int
+	lastIDDBKey  int64
+	tokens       []string
 }
 
-func NewDreamBoothAPI(log *zap.Logger, cfg *DreamBoothSettings) *DreamBoothAPI {
-	return &DreamBoothAPI{log, cfg.RetryCount, cfg.RetryInterval}
+func NewDreamBoothAPI(log *zap.Logger, cfg *DreamBoothSettings) *DreamBooth {
+	return &DreamBooth{log: log, retryCount: cfg.RetryCount, retryTimeout: cfg.RetryInterval}
+}
+
+func (d *DreamBooth) GenerateText(_ context.Context, _ string) (body []byte, err error) {
+	return nil, nil
+}
+
+func (d *DreamBooth) GenerateImage(ctx context.Context, prompt string) (body []byte, fileName string, err error) {
+	var retryCount int
+	lastIDDBKey := atomic.LoadInt64(&d.lastIDDBKey)
+	for idx := lastIDDBKey; idx < int64(len(d.tokens)); idx++ {
+		retryCount++
+		body, fileName, err = d.TextToImage(ctx, prompt, d.tokens[idx])
+		if err == nil || !errors.Is(err, errDBMonthLimit) || retryCount == d.retryCount {
+			if idx != lastIDDBKey {
+				atomic.StoreInt64(&d.lastIDDBKey, idx)
+			}
+			return body, fileName, err
+		}
+		if idx == int64(len(d.tokens))-1 {
+			idx = 0
+		}
+	}
+	return nil, "", err
 }
 
 // TextToImage - https://stablediffusionapi.com/docs/community-models-api-v4/dreamboothtext2img
-func (d *DreamBoothAPI) TextToImage(text, key string) ([]byte, string, error) {
+func (d *DreamBooth) TextToImage(ctx context.Context, text, key string) ([]byte, string, error) {
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req)
 	resp := fasthttp.AcquireResponse()
@@ -62,10 +94,10 @@ func (d *DreamBoothAPI) TextToImage(text, key string) ([]byte, string, error) {
 	if resp.StatusCode() != fasthttp.StatusOK {
 		return nil, "", errDBInvalidRespCode
 	}
-	return d.processResponseBody(respBody, key)
+	return d.processResponseBody(ctx, respBody, key)
 }
 
-func (d *DreamBoothAPI) processResponseBody(respBody []byte, key string) ([]byte, string, error) {
+func (d *DreamBooth) processResponseBody(ctx context.Context, respBody []byte, key string) ([]byte, string, error) {
 	var p fastjson.Parser
 	v, err := p.ParseBytes(respBody)
 	if err != nil {
@@ -73,30 +105,38 @@ func (d *DreamBoothAPI) processResponseBody(respBody []byte, key string) ([]byte
 	}
 	outputURL := v.GetStringBytes("output", "0")
 	status := string(v.GetStringBytes("status"))
-	if status == "error" {
+	switch status {
+	case dbStatusProcessing:
+		requestID := strconv.Itoa(v.GetInt("id"))
+		if requestID == "" {
+			return nil, "", errDBRequestIDIsEmpty
+		}
+		outputURL, err = d.processRetryFetchQueuedImages(ctx, requestID, key)
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, "", err
+		}
+		if err != nil || len(outputURL) == 0 {
+			return nil, "", errDBOutputIsEmpty
+		}
+	case dbStatusError:
 		if isMonthLimitError(string(v.GetStringBytes("message"))) {
 			return nil, "", errDBMonthLimit
 		}
 		return nil, "", errDBStatusError
 	}
-	if status == "processing" {
-		requestID := strconv.Itoa(v.GetInt("id"))
-		if requestID == "" {
-			return nil, "", errDBRequestIDIsEmpty
-		}
-		outputURL, err = d.processRetryFetchQueuedImages(requestID, key)
-		if err != nil || len(outputURL) == 0 {
-			return nil, "", errDBOutputIsEmpty
-		}
-	}
 	return d.downloadFile(string(outputURL))
 }
 
-func (d *DreamBoothAPI) processRetryFetchQueuedImages(requestID, key string) (outputURL []byte, err error) {
+func (d *DreamBooth) processRetryFetchQueuedImages(ctx context.Context, requestID, key string) (outputURL []byte, err error) {
 	for i := 0; i < d.retryCount; i++ {
-		time.Sleep(time.Duration(d.retryTimeout) * time.Second)
 		outputURL, err = d.FetchQueuedImages(requestID, key)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
 		if err != nil {
+			time.Sleep(time.Duration(d.retryTimeout) * time.Second)
 			continue
 		}
 		return
@@ -105,7 +145,7 @@ func (d *DreamBoothAPI) processRetryFetchQueuedImages(requestID, key string) (ou
 }
 
 // FetchQueuedImages - https://stablediffusionapi.com/docs/community-models-api-v4/dreamboothfetchqueimg
-func (d *DreamBoothAPI) FetchQueuedImages(requestID, key string) ([]byte, error) {
+func (d *DreamBooth) FetchQueuedImages(requestID, key string) ([]byte, error) {
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req)
 	resp := fasthttp.AcquireResponse()
@@ -135,7 +175,7 @@ func (d *DreamBoothAPI) FetchQueuedImages(requestID, key string) ([]byte, error)
 	return output, nil
 }
 
-func (d *DreamBoothAPI) downloadFile(fileURL string) ([]byte, string, error) {
+func (d *DreamBooth) downloadFile(fileURL string) ([]byte, string, error) {
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req)
 	resp := fasthttp.AcquireResponse()

@@ -1,4 +1,4 @@
-package gotbotopenai
+package tbotopenai
 
 import (
 	"bytes"

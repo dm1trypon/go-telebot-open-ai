@@ -9,7 +9,10 @@ import (
 	"google.golang.org/api/drive/v3"
 )
 
-const timeLayout = "2006-01-02T15:04:05.9999999-07:00"
+const (
+	timeLayout  = "2006-01-02T15:04:05.999999e9-07:00"
+	redirectURL = "http://localhost"
+)
 
 type GoogleDriveAPI struct {
 	credentials *oauth2.Config
@@ -30,7 +33,7 @@ func NewGoogleDriveAPI(credCfg CredentialsSettings, tokenCfg TokenSettings, time
 				AuthURL:  credCfg.AuthURI,
 				TokenURL: credCfg.TokenURI,
 			},
-			RedirectURL: "http://localhost",
+			RedirectURL: redirectURL,
 			Scopes:      []string{drive.DriveReadonlyScope},
 		},
 		&oauth2.Token{
@@ -48,7 +51,6 @@ func (g *GoogleDriveAPI) Download(fileID string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Получаем информацию о файле
 	_, err = service.Files.Get(fileID).Do()
 	if err != nil {
 		return nil, err

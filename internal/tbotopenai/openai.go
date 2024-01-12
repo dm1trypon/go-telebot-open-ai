@@ -1,4 +1,6 @@
-package gotbotopenai
+package tbotopenai
+
+// TODO: ChatGPT не используется, так как нет ключей OpenAI.
 
 import (
 	"context"
@@ -7,8 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dm1trypon/go-telebot-open-ai/pkg/strgen"
 	"github.com/sashabaranov/go-openai"
+
+	"github.com/dm1trypon/go-telebot-open-ai/pkg/strgen"
 )
 
 const (
@@ -25,28 +28,25 @@ var (
 	errChatGPTEmptyRespChoices = errors.New("ChatGPT empty resp choices")
 )
 
-type ChatGPT struct {
-	clients       map[string]*openai.Client
+type OpenAI struct {
+	client        *openai.Client
 	retryRequest  int
 	retryInterval int
 }
 
-func NewChatGPT(cfg *ChatGPTSettings) *ChatGPT {
-	chatGPT := &ChatGPT{
-		clients:       make(map[string]*openai.Client, len(cfg.Tokens)),
-		retryRequest:  cfg.RetryRequest,
+func NewOpenAI(cfg *OpenAISettings) *OpenAI {
+	chatGPT := &OpenAI{
+		client:        openai.NewClient(cfg.Token),
+		retryRequest:  cfg.RetryCount,
 		retryInterval: cfg.RetryInterval,
-	}
-	for token := range cfg.Tokens {
-		chatGPT.clients[token] = openai.NewClient(token)
 	}
 	return chatGPT
 }
 
-func (c *ChatGPT) GenerateImage(ctx context.Context, token, prompt, size string) ([]byte, string, error) {
+func (o *OpenAI) GenerateImage(ctx context.Context, prompt string) ([]byte, string, error) {
 	reqBase64 := openai.ImageRequest{
 		Prompt:         prompt,
-		Size:           size,
+		Size:           openai.CreateImageSize1024x1024,
 		ResponseFormat: openai.CreateImageResponseFormatB64JSON,
 		N:              1,
 	}
@@ -54,12 +54,12 @@ func (c *ChatGPT) GenerateImage(ctx context.Context, token, prompt, size string)
 		respBase64 openai.ImageResponse
 		err        error
 	)
-	for i := 0; i < c.retryRequest; i++ {
-		respBase64, err = c.clients[token].CreateImage(ctx, reqBase64)
+	for i := 0; i < o.retryRequest; i++ {
+		respBase64, err = o.client.CreateImage(ctx, reqBase64)
 		if isSkipRetry(err) {
 			break
 		}
-		time.Sleep(time.Second * time.Duration(c.retryInterval))
+		time.Sleep(time.Second * time.Duration(o.retryInterval))
 	}
 	if len(respBase64.Data) == 0 {
 		return nil, "", errChatGPTEmptyRespData
@@ -71,26 +71,26 @@ func (c *ChatGPT) GenerateImage(ctx context.Context, token, prompt, size string)
 	return body, strgen.Generate(lenImgFileName) + formatImgFile, err
 }
 
-func (c *ChatGPT) GenerateText(ctx context.Context, token, content string) ([]byte, error) {
+func (o *OpenAI) GenerateText(ctx context.Context, prompt string) ([]byte, error) {
 	var (
 		resp openai.ChatCompletionResponse
 		err  error
 	)
 	req := openai.ChatCompletionRequest{
-		Model: openai.GPT3Dot5Turbo0613,
+		Model: openai.GPT432K0613,
 		Messages: []openai.ChatCompletionMessage{
 			{
 				Role:    openai.ChatMessageRoleUser,
-				Content: content,
+				Content: prompt,
 			},
 		},
 	}
-	for i := 0; i < c.retryRequest; i++ {
-		resp, err = c.clients[token].CreateChatCompletion(ctx, req)
+	for i := 0; i < o.retryRequest; i++ {
+		resp, err = o.client.CreateChatCompletion(ctx, req)
 		if isSkipRetry(err) {
 			break
 		}
-		time.Sleep(time.Second * time.Duration(c.retryInterval))
+		time.Sleep(time.Second * time.Duration(o.retryInterval))
 	}
 	if err != nil {
 		return nil, err
