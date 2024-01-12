@@ -1,8 +1,11 @@
-package gotbotopenai
+package tbotopenai
 
 import (
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"sync"
+
 	"go.uber.org/zap"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 // NewUpdate gets updates since the last Offset
@@ -13,10 +16,12 @@ type message struct {
 	messageID int
 	text      string
 	command   string
+	username  string
 }
 
-type BotClient interface {
+type Messenger interface {
 	Run()
+	Stop()
 	ReplyText(int, int64, string) error
 	ReplyFile(int, int64, []byte, string) error
 }
@@ -26,11 +31,10 @@ type Telegram struct {
 	updateConfig tgbotapi.UpdateConfig
 	updateChan   tgbotapi.UpdatesChannel
 	log          *zap.Logger
-	msgChan      chan *message
-	quitChan     chan<- struct{}
+	msgChan      chan<- *message
 }
 
-func NewTelegram(cfg *TelegramSettings, log *zap.Logger, msgChan chan *message, quitChan chan<- struct{}) (*Telegram, error) {
+func NewTelegram(cfg *TelegramSettings, log *zap.Logger, msgChan chan<- *message) (*Telegram, error) {
 	bot, err := tgbotapi.NewBotAPI(cfg.Token)
 	if err != nil {
 		return nil, err
@@ -39,36 +43,43 @@ func NewTelegram(cfg *TelegramSettings, log *zap.Logger, msgChan chan *message, 
 	updateConfig := tgbotapi.NewUpdate(updaterOffset)
 	updateConfig.Timeout = cfg.Timeout
 	updateChan := bot.GetUpdatesChan(updateConfig)
-	return &Telegram{bot, updateConfig, updateChan, log, msgChan, quitChan}, nil
+	return &Telegram{bot, updateConfig, updateChan, log, msgChan}, nil
 }
 
 func (t *Telegram) Run() {
-	go t.initReadingMessagesWorker()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go t.initReadingMessagesWorker(&wg)
+	wg.Wait()
 }
 
-func (t *Telegram) initReadingMessagesWorker() {
+func (t *Telegram) Stop() {
+	t.bot.StopReceivingUpdates()
+}
+
+func (t *Telegram) initReadingMessagesWorker(wg *sync.WaitGroup) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.log.Error("Recovered panic err:", zap.Any("panic", r))
+		}
+	}()
+	defer wg.Done()
 	for {
 		select {
 		case update, ok := <-t.updateChan:
 			if !ok {
-				// shutdown service
-				t.quitChan <- struct{}{}
 				return
 			}
 			if update.Message == nil || update.Message.Chat == nil {
 				continue
 			}
-			t.log.Debug("Received message",
-				zap.String("user", update.Message.From.UserName),
-				zap.String("body", update.Message.Text),
-				zap.String("command", update.Message.Command()))
-			if len(t.msgChan) == cap(t.msgChan) {
-				if err := t.ReplyText(update.Message.MessageID, update.Message.Chat.ID, "Слишком большая нагрузка на бота, выполните запрос чуть позже"); err != nil {
-					t.log.Error("Reply message error:", zap.Error(err))
-				}
-				return
+			t.msgChan <- &message{
+				chatID:    update.Message.Chat.ID,
+				messageID: update.Message.MessageID,
+				text:      update.Message.Text,
+				command:   update.Message.Command(),
+				username:  update.Message.From.UserName,
 			}
-			t.msgChan <- &message{update.Message.Chat.ID, update.Message.MessageID, update.Message.Text, update.Message.Command()}
 		}
 	}
 }

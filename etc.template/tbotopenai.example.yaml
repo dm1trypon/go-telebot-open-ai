@@ -1,0 +1,47 @@
+log:
+  development: true
+  encoding: json
+  level: debug
+  outputPaths:
+    - logs/tbotopenai-output.log
+  errorOutputPaths:
+    - logs/tbotopenai-error.log
+  encoderConfig:
+    messageKey: msg
+    levelKey: level
+    timeKey: ts
+    callerKey: caller
+    stacktraceKey:
+    lineEnding: "\n"
+    levelEncoder: lowercase
+    timeEncoder: iso8601
+    durationEncoder: string
+    callerEncoder: short
+    nameEncoder: full
+telegram:
+  token: telegram_token
+  debug: false
+  timeout: 100
+  reconnect_interval: 1
+chatgpt:
+  timeout: 10
+openai:
+  token: token
+  retry_interval: 5
+  retry_count: 5
+  timeout: 10
+dreambooth:
+  tokens:
+    - dd_token_1
+    - dd_token_2
+    - dd_token_3
+    - dd_token_4
+    - dd_token_5
+  retry_interval: 5
+  retry_count: 5
+  timeout: 10
+len_message_chan: 1000
+queue_message_workers: 4
+max_client_dreambooth_jobs: 2
+max_client_openai_jobs: 2
+max_client_chatgpt_jobs: 2
