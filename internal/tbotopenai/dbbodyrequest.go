@@ -86,7 +86,7 @@ func (d *DBBodyRequest) fillChangedFields(body string) {
 		case "guidance_scale":
 			guidanceScale, err := strconv.ParseFloat(val, 64)
 			if err != nil {
-				break
+				continue
 			}
 			d.guidanceScale = guidanceScale
 		case "multi_lingual":
