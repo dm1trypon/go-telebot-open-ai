@@ -48,7 +48,12 @@ type DreamBooth struct {
 }
 
 func NewDreamBoothAPI(log *zap.Logger, cfg *DreamBoothSettings) *DreamBooth {
-	return &DreamBooth{log: log, retryCount: cfg.RetryCount, retryTimeout: cfg.RetryInterval}
+	return &DreamBooth{
+		log:          log,
+		retryCount:   cfg.RetryCount,
+		retryTimeout: cfg.RetryInterval,
+		tokens:       cfg.Tokens,
+	}
 }
 
 func (d *DreamBooth) GenerateText(_ context.Context, _ string) (body []byte, err error) {
@@ -56,6 +61,9 @@ func (d *DreamBooth) GenerateText(_ context.Context, _ string) (body []byte, err
 }
 
 func (d *DreamBooth) GenerateImage(ctx context.Context, prompt string) (body []byte, fileName string, err error) {
+	if len(d.tokens) == 0 {
+		return nil, "", errors.New("empty DreamBooth tokens")
+	}
 	var retryCount int
 	lastIDDBKey := atomic.LoadInt64(&d.lastIDDBKey)
 	for idx := lastIDDBKey; idx < int64(len(d.tokens)); idx++ {
