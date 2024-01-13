@@ -182,32 +182,32 @@ type clientStateByChatID struct {
 	mutex sync.RWMutex
 }
 
-func (t *clientStateByChatID) AddClient(chatID int64) error {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-	_, ok := t.value[chatID]
+func (c *clientStateByChatID) AddClient(chatID int64) error {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	_, ok := c.value[chatID]
 	if ok {
 		return chatIDAlreadyExistErr
 	}
-	t.value[chatID] = NewTClient()
+	c.value[chatID] = NewTClient()
 	return nil
 }
 
-func (t *clientStateByChatID) DeleteClient(chatID int64) error {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-	tc, ok := t.value[chatID]
+func (c *clientStateByChatID) DeleteClient(chatID int64) error {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	tc, ok := c.value[chatID]
 	if !ok || tc == nil {
 		return chatIDIsNotExistErr
 	}
-	delete(t.value, chatID)
+	delete(c.value, chatID)
 	return nil
 }
 
-func (t *clientStateByChatID) UpdateClientCommand(chatID int64, command string) error {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-	tc, ok := t.value[chatID]
+func (c *clientStateByChatID) UpdateClientCommand(chatID int64, command string) error {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	tc, ok := c.value[chatID]
 	if !ok || tc == nil {
 		return chatIDIsNotExistErr
 	}
@@ -215,140 +215,140 @@ func (t *clientStateByChatID) UpdateClientCommand(chatID int64, command string) 
 	return nil
 }
 
-func (t *clientStateByChatID) ClientCommand(chatID int64) (string, error) {
-	t.mutex.RLock()
-	defer t.mutex.RUnlock()
-	tc, ok := t.value[chatID]
+func (c *clientStateByChatID) ClientCommand(chatID int64) (string, error) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	tc, ok := c.value[chatID]
 	if !ok || tc == nil {
 		return "", chatIDIsNotExistErr
 	}
 	return tc.Command(), nil
 }
 
-func (t *clientStateByChatID) ClientChatGPTJobs(chatID int64) ([]int, error) {
-	t.mutex.RLock()
-	defer t.mutex.RUnlock()
-	tc, ok := t.value[chatID]
+func (c *clientStateByChatID) ClientChatGPTJobs(chatID int64) ([]int, error) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	tc, ok := c.value[chatID]
 	if !ok || tc == nil {
 		return nil, chatIDIsNotExistErr
 	}
 	return tc.ChatGPTJobs(), nil
 }
 
-func (t *clientStateByChatID) ClientDreamBoothJobs(chatID int64) ([]int, error) {
-	t.mutex.RLock()
-	defer t.mutex.RUnlock()
-	tc, ok := t.value[chatID]
+func (c *clientStateByChatID) ClientDreamBoothJobs(chatID int64) ([]int, error) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	tc, ok := c.value[chatID]
 	if !ok || tc == nil {
 		return nil, chatIDIsNotExistErr
 	}
 	return tc.DreamBoothJobs(), nil
 }
 
-func (t *clientStateByChatID) ClientOpenAIJobs(chatID int64) ([]int, error) {
-	t.mutex.RLock()
-	defer t.mutex.RUnlock()
-	tc, ok := t.value[chatID]
+func (c *clientStateByChatID) ClientOpenAIJobs(chatID int64) ([]int, error) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	tc, ok := c.value[chatID]
 	if !ok || tc == nil {
 		return nil, chatIDIsNotExistErr
 	}
 	return tc.OpenAIJobs(), nil
 }
 
-func (t *clientStateByChatID) ClientLenChatGPTJobs(chatID int64) (int, error) {
-	t.mutex.RLock()
-	defer t.mutex.RUnlock()
-	tc, ok := t.value[chatID]
+func (c *clientStateByChatID) ClientLenChatGPTJobs(chatID int64) (int, error) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	tc, ok := c.value[chatID]
 	if !ok || tc == nil {
 		return -1, chatIDIsNotExistErr
 	}
 	return tc.LenChatGPTJobs(), nil
 }
 
-func (t *clientStateByChatID) ClientLenDreamBoothJobs(chatID int64) (int, error) {
-	t.mutex.RLock()
-	defer t.mutex.RUnlock()
-	tc, ok := t.value[chatID]
+func (c *clientStateByChatID) ClientLenDreamBoothJobs(chatID int64) (int, error) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	tc, ok := c.value[chatID]
 	if !ok || tc == nil {
 		return -1, chatIDIsNotExistErr
 	}
 	return tc.LenDreamBoothJobs(), nil
 }
 
-func (t *clientStateByChatID) ClientLenOpenAIJobs(chatID int64) (int, error) {
-	t.mutex.RLock()
-	defer t.mutex.RUnlock()
-	tc, ok := t.value[chatID]
+func (c *clientStateByChatID) ClientLenOpenAIJobs(chatID int64) (int, error) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	tc, ok := c.value[chatID]
 	if !ok || tc == nil {
 		return -1, chatIDIsNotExistErr
 	}
 	return tc.LenOpenAIJobs(), nil
 }
 
-func (t *clientStateByChatID) ClientAddChatGPTJob(cancel context.CancelFunc, jobID int, chatID int64) error {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-	tc, ok := t.value[chatID]
+func (c *clientStateByChatID) ClientAddChatGPTJob(cancel context.CancelFunc, jobID int, chatID int64) error {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	tc, ok := c.value[chatID]
 	if !ok || tc == nil {
 		return chatIDIsNotExistErr
 	}
 	return tc.SetCancelChatGPTJob(cancel, jobID)
 }
 
-func (t *clientStateByChatID) ClientAddDreamBoothJob(cancel context.CancelFunc, jobID int, chatID int64) error {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-	tc, ok := t.value[chatID]
+func (c *clientStateByChatID) ClientAddDreamBoothJob(cancel context.CancelFunc, jobID int, chatID int64) error {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	tc, ok := c.value[chatID]
 	if !ok || tc == nil {
 		return chatIDIsNotExistErr
 	}
 	return tc.SetCancelDreamBoothJob(cancel, jobID)
 }
 
-func (t *clientStateByChatID) ClientAddOpenAIJob(cancel context.CancelFunc, jobID int, chatID int64) error {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-	tc, ok := t.value[chatID]
+func (c *clientStateByChatID) ClientAddOpenAIJob(cancel context.CancelFunc, jobID int, chatID int64) error {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	tc, ok := c.value[chatID]
 	if !ok || tc == nil {
 		return chatIDIsNotExistErr
 	}
 	return tc.SetCancelOpenAIJob(cancel, jobID)
 }
 
-func (t *clientStateByChatID) ClientCancelChatGPTJob(jobID int, chatID int64) error {
-	t.mutex.RLock()
-	defer t.mutex.RUnlock()
-	tc, ok := t.value[chatID]
+func (c *clientStateByChatID) ClientCancelChatGPTJob(jobID int, chatID int64) error {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	tc, ok := c.value[chatID]
 	if !ok || tc == nil {
 		return chatIDIsNotExistErr
 	}
 	return tc.CancelChatGPTJob(jobID)
 }
 
-func (t *clientStateByChatID) ClientCancelDreamBoothJob(jobID int, chatID int64) error {
-	t.mutex.RLock()
-	defer t.mutex.RUnlock()
-	tc, ok := t.value[chatID]
+func (c *clientStateByChatID) ClientCancelDreamBoothJob(jobID int, chatID int64) error {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	tc, ok := c.value[chatID]
 	if !ok || tc == nil {
 		return chatIDIsNotExistErr
 	}
 	return tc.CancelDreamBoothJob(jobID)
 }
 
-func (t *clientStateByChatID) ClientCancelOpenAIJob(jobID int, chatID int64) error {
-	t.mutex.RLock()
-	defer t.mutex.RUnlock()
-	tc, ok := t.value[chatID]
+func (c *clientStateByChatID) ClientCancelOpenAIJob(jobID int, chatID int64) error {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	tc, ok := c.value[chatID]
 	if !ok || tc == nil {
 		return chatIDIsNotExistErr
 	}
 	return tc.CancelOpenAIJob(jobID)
 }
 
-func (t *clientStateByChatID) ClientCancelJobs(chatID int64) error {
-	t.mutex.RLock()
-	defer t.mutex.RUnlock()
-	tc, ok := t.value[chatID]
+func (c *clientStateByChatID) ClientCancelJobs(chatID int64) error {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	tc, ok := c.value[chatID]
 	if !ok || tc == nil {
 		return chatIDIsNotExistErr
 	}
