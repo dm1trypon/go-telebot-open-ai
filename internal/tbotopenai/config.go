@@ -14,6 +14,7 @@ type Config struct {
 	DreamBooth              DreamBoothSettings `yaml:"dreambooth"`
 	Logger                  zap.Config         `yaml:"log"`
 	LenMessageChan          int                `yaml:"len_message_chan"`
+	LenQueueTaskChan        int                `yaml:"len_queue_task_chan"`
 	QueueMessageWorkers     int                `yaml:"queue_message_workers"`
 	MaxClientOpenAIJobs     int                `yaml:"max_client_openai_jobs"`
 	MaxClientChatGPTJobs    int                `yaml:"max_client_chatgpt_jobs"`
