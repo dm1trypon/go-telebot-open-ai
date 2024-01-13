@@ -27,6 +27,7 @@ var (
 	errDBFQIParsingRespBody          = errors.New("DreamBooth FetchQueuedImages parsing response body error")
 	errDBDownloadFileInvalidRespCode = errors.New("DreamBooth download file response status code is not 200")
 	errDBDownloadFileRespBodyIsEmpty = errors.New("DreamBooth download file empty response body")
+	errDBEmptyTokens                 = errors.New("DreamBooth empty tokens")
 )
 
 const (
@@ -62,7 +63,7 @@ func (d *DreamBooth) GenerateText(_ context.Context, _ string) (body []byte, err
 
 func (d *DreamBooth) GenerateImage(ctx context.Context, prompt string) (body []byte, fileName string, err error) {
 	if len(d.tokens) == 0 {
-		return nil, "", errors.New("empty DreamBooth tokens")
+		return nil, "", errDBEmptyTokens
 	}
 	var retryCount int
 	lastIDDBKey := atomic.LoadInt64(&d.lastIDDBKey)
