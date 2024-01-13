@@ -40,8 +40,8 @@ type TBotOpenAI struct {
 }
 
 func NewTBotOpenAI(cfg *Config, log *zap.Logger) (*TBotOpenAI, error) {
-	msgChan := make(chan *message, 1)
-	queueTaskChan := make(chan *message, cfg.LenMessageChan)
+	msgChan := make(chan *message, cfg.LenMessageChan)
+	queueTaskChan := make(chan *message, cfg.LenQueueTaskChan)
 	telegram, err := NewTelegram(&cfg.Telegram, log, msgChan)
 	if err != nil {
 		return nil, err
