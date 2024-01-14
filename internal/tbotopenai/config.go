@@ -41,7 +41,6 @@ type ChatGPTSettings struct {
 
 type DreamBoothSettings struct {
 	Tokens        []string `yaml:"tokens"`
-	RetryCount    int      `yaml:"retry_count"`
 	RetryInterval int      `yaml:"retry_interval"`
 	Timeout       int      `yaml:"timeout"`
 }
