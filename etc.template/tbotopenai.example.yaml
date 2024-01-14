@@ -28,7 +28,6 @@ chatgpt:
 openai:
   token: token
   retry_interval: 5
-  retry_count: 5
   timeout: 10
 dreambooth:
   tokens:
