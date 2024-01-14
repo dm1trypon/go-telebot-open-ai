@@ -126,8 +126,9 @@ func (t *TBotOpenAI) initProcessMessagesWorker(wg *sync.WaitGroup) {
 			if msg.text == "" {
 				continue
 			}
-			if _, err := t.clientStates.ClientCommand(msg.chatID); err != nil {
-				if err = t.telegram.ReplyText(msg.messageID, msg.chatID, respBodySessionIsNotExist); err != nil {
+			body = t.checkJobsLimit(msg.chatID)
+			if body != "" {
+				if err := t.telegram.ReplyText(msg.messageID, msg.chatID, body); err != nil {
 					t.log.Error("Reply message error:", zap.Error(err))
 				}
 				continue
@@ -138,6 +139,29 @@ func (t *TBotOpenAI) initProcessMessagesWorker(wg *sync.WaitGroup) {
 			t.queueTaskChan <- msg
 		}
 	}
+}
+
+func (t *TBotOpenAI) checkJobsLimit(chatID int64) string {
+	command, err := t.clientStates.ClientCommand(chatID)
+	if err != nil {
+		t.log.Error("Get client command err:", zap.Error(err))
+		return respBodySessionIsNotExist
+	}
+	switch command {
+	case commandChatGPT:
+		if body := t.checkClientChatGPTJobs(chatID); body != "" {
+			return body
+		}
+	case commandOpenAIText, commandOpenAIImage:
+		if body := t.checkClientOpenAIJobs(chatID); body != "" {
+			return body
+		}
+	case commandDreamBooth:
+		if body := t.checkClientDreamBoothJobs(chatID); body != "" {
+			return body
+		}
+	}
+	return ""
 }
 
 func (t *TBotOpenAI) initQueueTaskWorkers(wg *sync.WaitGroup) {
