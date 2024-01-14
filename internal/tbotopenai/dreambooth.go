@@ -33,7 +33,7 @@ var (
 
 const (
 	dbURL      = "https://stablediffusionapi.com/api/v4/dreambooth"
-	dbFetchURL = "https://stablediffusionapi.com/api/v4/dreambooth/fetch/"
+	dbFetchURL = "https://stablediffusionapi.com/api/v4/dreambooth/fetch"
 )
 
 const (
@@ -179,6 +179,7 @@ func (d *DreamBooth) FetchQueuedImages(requestID, key string) ([]byte, error) {
 	req.Header.SetContentType("application/json")
 	req.SetRequestURI(dbFetchURL)
 	reqBody := prepareFetchQueueImagesRequest(key, requestID)
+	req.SetBody(reqBody)
 	d.log.Debug("DreamBooth fetch request body:", zap.String("body", string(reqBody)))
 	if err := fasthttp.Do(req, resp); err != nil {
 		return nil, err
