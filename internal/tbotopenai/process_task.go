@@ -17,6 +17,7 @@ const (
 
 const (
 	labelChatGPT    = "ChatGPT"
+	labelOpenAI     = "OpenAI"
 	labelDreamBooth = "DreamBooth"
 )
 
@@ -42,6 +43,9 @@ func (t *TBotOpenAI) processCancelJob(text string, chatID int64) ([]byte, string
 	if err = t.clientStates.ClientCancelChatGPTJob(jobID, chatID); err == nil {
 		return respBodySuccessCancelJob(labelChatGPT, jobID), ""
 	}
+	if err = t.clientStates.ClientCancelOpenAIJob(jobID, chatID); err == nil {
+		return respBodySuccessCancelJob(labelOpenAI, jobID), ""
+	}
 	if err = t.clientStates.ClientCancelDreamBoothJob(jobID, chatID); err == nil {
 		return respBodySuccessCancelJob(labelDreamBooth, jobID), ""
 	}
@@ -49,9 +53,6 @@ func (t *TBotOpenAI) processCancelJob(text string, chatID int64) ([]byte, string
 }
 
 func (t *TBotOpenAI) processChatGPT(text string, chatID int64) ([]byte, string) {
-	if body := t.checkClientChatGPTJobs(chatID); body != "" {
-		return []byte(body), ""
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(t.cfg.ChatGPT.Timeout)*time.Second)
 	jobID := randIntByRange(minJobID, maxJobID)
 	if err := t.clientStates.ClientAddChatGPTJob(cancel, jobID, chatID); err != nil {
@@ -75,9 +76,6 @@ func (t *TBotOpenAI) processChatGPT(text string, chatID int64) ([]byte, string) 
 }
 
 func (t *TBotOpenAI) processOpenAIText(text string, chatID int64) ([]byte, string) {
-	if body := t.checkClientOpenAIJobs(chatID); body != "" {
-		return []byte(body), ""
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(t.cfg.OpenAI.Timeout)*time.Second)
 	jobID := randIntByRange(minJobID, maxJobID)
 	if err := t.clientStates.ClientAddOpenAIJob(cancel, jobID, chatID); err != nil {
@@ -101,9 +99,6 @@ func (t *TBotOpenAI) processOpenAIText(text string, chatID int64) ([]byte, strin
 }
 
 func (t *TBotOpenAI) processOpenAIImage(text string, chatID int64) ([]byte, string) {
-	if body := t.checkClientOpenAIJobs(chatID); body != "" {
-		return []byte(body), ""
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(t.cfg.OpenAI.Timeout)*time.Second)
 	jobID := randIntByRange(minJobID, maxJobID)
 	if err := t.clientStates.ClientAddOpenAIJob(cancel, jobID, chatID); err != nil {
@@ -127,9 +122,6 @@ func (t *TBotOpenAI) processOpenAIImage(text string, chatID int64) ([]byte, stri
 }
 
 func (t *TBotOpenAI) processDreamBooth(text string, chatID int64) ([]byte, string) {
-	if body := t.checkClientDreamBoothJobs(chatID); body != "" {
-		return []byte(body), ""
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(t.cfg.DreamBooth.Timeout)*time.Second)
 	jobID := randIntByRange(minJobID, maxJobID)
 	if err := t.clientStates.ClientAddDreamBoothJob(cancel, jobID, chatID); err != nil {
