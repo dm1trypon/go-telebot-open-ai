@@ -177,7 +177,7 @@ func (d *DreamBooth) FetchQueuedImages(requestID, key string) ([]byte, error) {
 	defer fasthttp.ReleaseResponse(resp)
 	req.Header.SetMethod(fasthttp.MethodPost)
 	req.Header.SetContentType("application/json")
-	req.SetRequestURI(dbFetchURL + requestID)
+	req.SetRequestURI(dbFetchURL)
 	reqBody := prepareFetchQueueImagesRequest(key, requestID)
 	d.log.Debug("DreamBooth fetch request body:", zap.String("body", string(reqBody)))
 	if err := fasthttp.Do(req, resp); err != nil {
