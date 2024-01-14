@@ -133,7 +133,7 @@ func (t *TBotOpenAI) initProcessMessagesWorker(wg *sync.WaitGroup) {
 				}
 				continue
 			}
-			if err := t.telegram.ReplyText(msg.messageID, msg.chatID, "Запрос добавлен в очередь"); err != nil {
+			if err := t.telegram.ReplyText(msg.messageID, msg.chatID, respBodyRequestAddedToQueue); err != nil {
 				t.log.Error("Reply message error:", zap.Error(err))
 			}
 			t.queueTaskChan <- msg
