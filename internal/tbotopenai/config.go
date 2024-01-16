@@ -12,6 +12,8 @@ type Config struct {
 	ChatGPT                 ChatGPTSettings    `yaml:"chatgpt"`
 	OpenAI                  OpenAISettings     `yaml:"openai"`
 	DreamBooth              DreamBoothSettings `yaml:"dreambooth"`
+	Roles                   RolesSettings      `yaml:"roles"`
+	Permissions             PermissionSettings `yaml:"permissions"`
 	Logger                  zap.Config         `yaml:"log"`
 	LenMessageChan          int                `yaml:"len_message_chan"`
 	LenQueueTaskChan        int                `yaml:"len_queue_task_chan"`
@@ -43,6 +45,16 @@ type DreamBoothSettings struct {
 	Tokens        []string `yaml:"tokens"`
 	RetryInterval int      `yaml:"retry_interval"`
 	Timeout       int      `yaml:"timeout"`
+}
+
+type RolesSettings struct {
+	Admins []string `yaml:"admin"`
+	Users  []string `yaml:"user"`
+}
+
+type PermissionSettings struct {
+	AdminCommands []string `yaml:"admin"`
+	UserCommands  []string `yaml:"user"`
 }
 
 func NewConfig(filePath string) (*Config, error) {

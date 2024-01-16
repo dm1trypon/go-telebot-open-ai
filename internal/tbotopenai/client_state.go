@@ -44,14 +44,16 @@ func ErrorDreamBoothJobIsAlreadyUsed(id int) error {
 
 type clientState struct {
 	command        string
+	username       string
 	openAICancels  map[int]context.CancelFunc
 	chatGPTCancels map[int]context.CancelFunc
 	ddCancels      map[int]context.CancelFunc
 }
 
-func NewTClient() *clientState {
+func NewTClient(username string) *clientState {
 	return &clientState{
 		command:        commandStart,
+		username:       username,
 		openAICancels:  make(map[int]context.CancelFunc),
 		chatGPTCancels: make(map[int]context.CancelFunc),
 		ddCancels:      make(map[int]context.CancelFunc),
@@ -68,6 +70,14 @@ func (c *clientState) LenChatGPTJobs() int {
 
 func (c *clientState) LenDreamBoothJobs() int {
 	return len(c.ddCancels)
+}
+
+func (c *clientState) SetUsername(username string) {
+	c.username = username
+}
+
+func (c *clientState) Username() string {
+	return c.username
 }
 
 func (c *clientState) OpenAIJobs() []int {
@@ -182,14 +192,14 @@ type clientStateByChatID struct {
 	mutex sync.RWMutex
 }
 
-func (c *clientStateByChatID) AddClient(chatID int64) error {
+func (c *clientStateByChatID) AddClient(chatID int64, username string) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	_, ok := c.value[chatID]
 	if ok {
 		return chatIDAlreadyExistErr
 	}
-	c.value[chatID] = NewTClient()
+	c.value[chatID] = NewTClient(username)
 	return nil
 }
 
@@ -355,4 +365,14 @@ func (c *clientStateByChatID) ClientCancelJobs(chatID int64) error {
 	tc.CancelChatGPTJobs()
 	tc.CancelDreamBoothJobs()
 	return nil
+}
+
+func (c *clientStateByChatID) ClientUsername(chatID int64) (string, error) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	tc, ok := c.value[chatID]
+	if !ok || tc == nil {
+		return "", chatIDIsNotExistErr
+	}
+	return tc.Username(), nil
 }
