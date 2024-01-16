@@ -18,6 +18,12 @@ const (
 	commandHelp               = "help"
 	commandCancelJob          = "cancelJob"
 	commandListJobs           = "listJobs"
+	commandHistory            = "history"
+)
+
+const (
+	roleAdmin = "admin"
+	roleUser  = "user"
 )
 
 type AI interface {
@@ -35,8 +41,10 @@ type TBotOpenAI struct {
 	log              *zap.Logger
 	msgChan          chan *message
 	queueTaskChan    chan *message
+	userRoles        map[string]map[string]struct{}
+	permissions      map[string]map[string]struct{}
 	taskByCmd        map[string]func(text string, chatID int64) ([]byte, string)
-	clientStateByCmd map[string]func(command string, chatID int64) string
+	clientStateByCmd map[string]func(command, username string, chatID int64) string
 }
 
 func NewTBotOpenAI(cfg *Config, log *zap.Logger) (*TBotOpenAI, error) {
@@ -57,13 +65,15 @@ func NewTBotOpenAI(cfg *Config, log *zap.Logger) (*TBotOpenAI, error) {
 		msgChan:       msgChan,
 		queueTaskChan: queueTaskChan,
 	}
+	g.setUserRoles(&cfg.Roles)
+	g.setPermissions(&cfg.Permissions)
 	g.taskByCmd = make(map[string]func(text string, chatID int64) (body []byte, fileName string), 5)
 	g.taskByCmd[commandChatGPT] = g.processChatGPT
 	g.taskByCmd[commandDreamBooth] = g.processDreamBooth
 	g.taskByCmd[commandCancelJob] = g.processCancelJob
 	g.taskByCmd[commandOpenAIText] = g.processOpenAIText
 	g.taskByCmd[commandOpenAIImage] = g.processOpenAIImage
-	g.clientStateByCmd = make(map[string]func(command string, chatID int64) string, 10)
+	g.clientStateByCmd = make(map[string]func(command, username string, chatID int64) string, 11)
 	g.clientStateByCmd[commandHelp] = g.commandHelp
 	g.clientStateByCmd[commandImageCustomExample] = g.commandDreamBoothExample
 	g.clientStateByCmd[commandStart] = g.commandStart
@@ -74,6 +84,7 @@ func NewTBotOpenAI(cfg *Config, log *zap.Logger) (*TBotOpenAI, error) {
 	g.clientStateByCmd[commandOpenAIImage] = g.commandOpenAIImage
 	g.clientStateByCmd[commandCancelJob] = g.commandCancelJob
 	g.clientStateByCmd[commandListJobs] = g.commandListJobs
+	g.clientStateByCmd[commandHistory] = g.commandHistory
 	return g, nil
 }
 
@@ -116,7 +127,7 @@ func (t *TBotOpenAI) initProcessMessagesWorker(wg *sync.WaitGroup) {
 				}
 				continue
 			}
-			body = t.processCommand(msg.command, msg.chatID)
+			body = t.processCommand(msg.command, msg.username, msg.chatID)
 			if body != "" {
 				if err := t.telegram.ReplyText(msg.messageID, msg.chatID, body); err != nil {
 					t.log.Error("Reply message error:", zap.Error(err))
