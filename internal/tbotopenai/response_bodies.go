@@ -32,17 +32,7 @@ const (
 🌅 /dreamBooth - продвинутая генерация изображений, используя API DreamBooth
 📄 /dreamBoothExample - пример промпта для генерации изображения через API DreamBooth
 🔧 /help - описание команд`
-	respBodyUndefinedCommand = "❌ Комманда не поддерживается. Чтобы посмотреть описание команд, введите команду /help"
-	respBodyCommandHelp      = `🔧 Доступные команды бота 🔧
-✅ /start - начало сессии с ботом
-⛔ /stop - завершение сессии с ботом
-📖 /chatGPT - генерация текста, используя API ресурса chatgptbot.ru (Модель gpt-3.5-turbo-1106)
-📖 /openAIText - генерация текста, используя API OpenAI (Модель gpt-4-32k-0613)
-🌄 /openAIImage - генерация изображения размером 1024x1024, используя API OpenAI
-🌅 /dreamBooth - продвинутая генерация изображений, используя API DreamBooth
-📄 /dreamBoothExample - пример промпта для генерации изображения через API DreamBooth
-📛 /cancelJob - отмена текущего запроса по ее номеру
-📋 /listJobs - список выполняющихся запросов в очереди`
+	respBodyUndefinedCommand         = "❌ Комманда не поддерживается. Чтобы посмотреть описание команд, введите команду /help"
 	respBodyCommandDreamBoothExample = `prompt: Iron Man, (Arnold Tsang, Toru Nakayama), Masterpiece, Studio Quality, 6k , toa, toaair, 1boy, glowing, axe, mecha, science_fiction, solo, weapon, jungle , green_background, nature, outdoors, solo, tree, weapon, mask, dynamic lighting, detailed shading, digital texture painting
 negative_prompt: un-detailed skin, semi-realistic, cgi, 3d, render, sketch, cartoon, drawing, ugly eyes, (out of frame:1.3), worst quality, low quality, jpeg artifacts, cgi, sketch, cartoon, drawing, (out of frame:1.1)
 width: 512
@@ -110,5 +100,24 @@ func respBodyListJobs(textJobIDs, imgJobIDs, openAIIDs []int) string {
 		b.WriteString(strconv.Itoa(openAIIDs[i]))
 		b.WriteString("\r\n")
 	}
+	return b.String()
+}
+
+func respBodyCommandHelp(role string) string {
+	var b strings.Builder
+	b.WriteString(`🔧 Доступные команды бота 🔧
+✅ /start - начало сессии с ботом
+⛔ /stop - завершение сессии с ботом
+📖 /chatGPT - генерация текста, используя API ресурса chatgptbot.ru (Модель gpt-3.5-turbo-1106)
+`)
+	if role == roleAdmin {
+		b.WriteString(`📖 /openAIText - генерация текста, используя API OpenAI (Модель gpt-4-32k-0613)
+🌄 /openAIImage - генерация изображения размером 1024x1024, используя API OpenAI
+`)
+	}
+	b.WriteString(`🌅 /dreamBooth - продвинутая генерация изображений, используя API DreamBooth
+📄 /dreamBoothExample - пример промпта для генерации изображения через API DreamBooth
+📛 /cancelJob - отмена текущего запроса по ее номеру
+📋 /listJobs - список выполняющихся запросов в очереди`)
 	return b.String()
 }

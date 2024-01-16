@@ -33,17 +33,7 @@ func (t *TBotOpenAI) setPermissions(permissions *PermissionSettings) {
 }
 
 func (t *TBotOpenAI) checkPermissions(command, username string) bool {
-	var curRole string
-	for _, role := range []string{roleAdmin, roleUser} {
-		if _, ok := t.userRoles[role][anyUser]; ok {
-			curRole = role
-			break
-		}
-		if _, ok := t.userRoles[role][username]; !ok {
-			curRole = role
-			break
-		}
-	}
+	curRole := t.getRole(username)
 	if curRole == "" {
 		return false
 	}
@@ -54,4 +44,19 @@ func (t *TBotOpenAI) checkPermissions(command, username string) bool {
 		return true
 	}
 	return false
+}
+
+func (t *TBotOpenAI) getRole(username string) string {
+	var curRole string
+	for _, role := range []string{roleAdmin, roleUser} {
+		if _, ok := t.userRoles[role][anyUser]; ok {
+			curRole = role
+			break
+		}
+		if _, ok := t.userRoles[role][username]; ok {
+			curRole = role
+			break
+		}
+	}
+	return curRole
 }

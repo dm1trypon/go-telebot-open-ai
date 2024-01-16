@@ -16,8 +16,12 @@ func (t *TBotOpenAI) processCommand(command, username string, chatID int64) stri
 	return f(command, username, chatID)
 }
 
-func (t *TBotOpenAI) commandHelp(_, _ string, _ int64) string {
-	return respBodyCommandHelp
+func (t *TBotOpenAI) commandHelp(_, username string, _ int64) string {
+	curRole := t.getRole(username)
+	if curRole == "" {
+		return respBodyUndefinedCommand
+	}
+	return respBodyCommandHelp(curRole)
 }
 
 func (t *TBotOpenAI) commandDreamBoothExample(_, _ string, _ int64) string {
