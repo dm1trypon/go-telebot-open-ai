@@ -107,10 +107,10 @@ func (t *TBotOpenAI) commandListJobs(_, _ string, chatID int64) (string, []byte)
 	return respBodyListJobs(textJobIDs, imgJobIDs, openAIIDs), nil
 }
 
-func (t *TBotOpenAI) commandHistory(_, _ string, _ int64) (string, []byte) {
+func (t *TBotOpenAI) commandStats(_, _ string, _ int64) (string, []byte) {
 	statsBody := t.stats.Bytes()
 	if len(statsBody) == 0 {
-		return respBodyHistoryCommand, nil
+		return respBodyStatsCommand, nil
 	}
 	return "", t.stats.Bytes()
 }
