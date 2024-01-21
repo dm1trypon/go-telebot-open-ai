@@ -12,6 +12,8 @@ import (
 
 const fileNameStats = "Статистика_запросов.csv"
 
+var csvHeader = []string{"Время", "Имя пользователя", "AI", "Запрос", "Ответ"}
+
 type statRow struct {
 	ts       string
 	username string
@@ -29,8 +31,8 @@ func (s *statRows) Unmarshal() [][]string {
 		row = append(row, (*s)[idx].ts)
 		row = append(row, (*s)[idx].username)
 		row = append(row, (*s)[idx].ai)
-		row = append(row, (*s)[idx].response)
 		row = append(row, (*s)[idx].request)
+		row = append(row, (*s)[idx].response)
 		rows = append(rows, row)
 	}
 	return rows
@@ -41,7 +43,7 @@ func (s *statRows) Flush() {
 }
 
 type Stats struct {
-	timer    *time.Timer
+	ticker   *time.Ticker
 	filepath string
 	rows     statRows
 	buf      []byte
@@ -51,7 +53,7 @@ type Stats struct {
 
 func NewStats(log *zap.Logger, interval time.Duration, filepath string) *Stats {
 	return &Stats{
-		timer:    time.NewTimer(interval),
+		ticker:   time.NewTicker(interval),
 		filepath: filepath,
 		quitChan: make(chan struct{}, 1),
 		log:      log,
@@ -64,10 +66,15 @@ func (s *Stats) Run(wg *sync.WaitGroup) error {
 	}
 	if _, err := os.Stat(s.filepath); os.IsNotExist(err) {
 		var file *os.File
-		file, err = os.Create(s.filepath)
+		file, err = os.OpenFile(s.filepath, os.O_WRONLY|os.O_CREATE, os.ModePerm)
 		if err != nil {
 			return err
 		}
+		w := csv.NewWriter(file)
+		if err = w.Write(csvHeader); err != nil {
+			return err
+		}
+		w.Flush()
 		if err = file.Close(); err != nil {
 			return err
 		}
@@ -90,7 +97,7 @@ func (s *Stats) initStatRowsWorker(wg *sync.WaitGroup) {
 	defer wg.Done()
 	for {
 		select {
-		case _, ok := <-s.timer.C:
+		case _, ok := <-s.ticker.C:
 			if !ok {
 				return
 			}
@@ -98,7 +105,7 @@ func (s *Stats) initStatRowsWorker(wg *sync.WaitGroup) {
 				s.log.Error("process stat's rows err:", zap.Error(err))
 			}
 		case <-s.quitChan:
-			s.timer.Stop()
+			s.ticker.Stop()
 			return
 		}
 	}
@@ -110,13 +117,13 @@ func (s *Stats) processStatRows() error {
 		return err
 	}
 	w := csv.NewWriter(file)
-	defer w.Flush()
 	for _, row := range s.rows.Unmarshal() {
 		if err = w.Write(row); err != nil {
 			return err
 		}
 	}
 	s.rows.Flush()
+	w.Flush()
 	if err = file.Close(); err != nil {
 		return err
 	}

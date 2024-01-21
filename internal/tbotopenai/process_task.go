@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/rand"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -64,7 +65,7 @@ func (t *TBotOpenAI) processCancelJob(text string, chatID int64) ([]byte, string
 }
 
 func (t *TBotOpenAI) processChatGPT(text string, chatID int64) ([]byte, string) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(t.cfg.ChatGPT.Timeout)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), t.cfg.ChatGPT.Timeout)
 	jobID := randIntByRange(minJobID, maxJobID)
 	if err := t.clientStates.ClientAddChatGPTJob(cancel, jobID, chatID); err != nil {
 		t.log.Error("Add ChatGPT job err:", zap.Error(err))
@@ -87,7 +88,7 @@ func (t *TBotOpenAI) processChatGPT(text string, chatID int64) ([]byte, string) 
 }
 
 func (t *TBotOpenAI) processOpenAIText(text string, chatID int64) ([]byte, string) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(t.cfg.OpenAI.Timeout)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), t.cfg.OpenAI.Timeout)
 	jobID := randIntByRange(minJobID, maxJobID)
 	if err := t.clientStates.ClientAddOpenAIJob(cancel, jobID, chatID); err != nil {
 		t.log.Error("Add OpenAI job err:", zap.Error(err))
@@ -110,7 +111,7 @@ func (t *TBotOpenAI) processOpenAIText(text string, chatID int64) ([]byte, strin
 }
 
 func (t *TBotOpenAI) processOpenAIImage(text string, chatID int64) ([]byte, string) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(t.cfg.OpenAI.Timeout)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), t.cfg.OpenAI.Timeout)
 	jobID := randIntByRange(minJobID, maxJobID)
 	if err := t.clientStates.ClientAddOpenAIJob(cancel, jobID, chatID); err != nil {
 		t.log.Error("Add OpenAI job err:", zap.Error(err))
@@ -133,7 +134,7 @@ func (t *TBotOpenAI) processOpenAIImage(text string, chatID int64) ([]byte, stri
 }
 
 func (t *TBotOpenAI) processDreamBooth(text string, chatID int64) ([]byte, string) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(t.cfg.DreamBooth.Timeout)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), t.cfg.DreamBooth.Timeout)
 	jobID := randIntByRange(minJobID, maxJobID)
 	if err := t.clientStates.ClientAddDreamBoothJob(cancel, jobID, chatID); err != nil {
 		t.log.Error("Add DreamBooth job err:", zap.Error(err))
@@ -163,9 +164,15 @@ func (t *TBotOpenAI) writeStats(command, username, request, response string) {
 			username: username,
 			ai:       command,
 			request:  request,
-			response: response,
+			response: prepareResponse(response),
 		})
 	}
+}
+
+func prepareResponse(response string) string {
+	response = strings.ReplaceAll(response, "\n", "")
+	response = strings.ReplaceAll(response, "\r", "")
+	return response
 }
 
 func randIntByRange(min, max int) int {
