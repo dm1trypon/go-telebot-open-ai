@@ -108,5 +108,5 @@ func (t *TBotOpenAI) commandListJobs(_, _ string, chatID int64) (string, []byte)
 }
 
 func (t *TBotOpenAI) commandHistory(_, _ string, _ int64) (string, []byte) {
-	return respBodyHistoryCommand, t.stats.Bytes()
+	return "", t.stats.Bytes()
 }

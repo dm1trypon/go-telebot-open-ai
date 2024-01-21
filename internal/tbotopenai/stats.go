@@ -2,7 +2,6 @@ package tbotopenai
 
 import (
 	"encoding/csv"
-	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -123,14 +122,6 @@ func (s *Stats) processStatRows() error {
 	}
 	if s.buf, err = os.ReadFile(s.filepath); err != nil {
 		return err
-	}
-	for {
-		_, err = file.Read(s.buf)
-		if err == io.EOF {
-			break
-		} else {
-			return err
-		}
 	}
 	return nil
 }
