@@ -30,14 +30,14 @@ var (
 
 type OpenAI struct {
 	client        *openai.Client
-	retryRequest  int
-	retryInterval int
+	retryCount    int
+	retryInterval time.Duration
 }
 
 func NewOpenAI(cfg *OpenAISettings) *OpenAI {
 	chatGPT := &OpenAI{
 		client:        openai.NewClient(cfg.Token),
-		retryRequest:  cfg.RetryCount,
+		retryCount:    cfg.RetryCount,
 		retryInterval: cfg.RetryInterval,
 	}
 	return chatGPT
@@ -54,12 +54,12 @@ func (o *OpenAI) GenerateImage(ctx context.Context, prompt string) ([]byte, stri
 		respBase64 openai.ImageResponse
 		err        error
 	)
-	for i := 0; i < o.retryRequest; i++ {
+	for i := 0; i < o.retryCount; i++ {
 		respBase64, err = o.client.CreateImage(ctx, reqBase64)
 		if isSkipRetry(err) {
 			break
 		}
-		time.Sleep(time.Second * time.Duration(o.retryInterval))
+		time.Sleep(o.retryInterval)
 	}
 	if len(respBase64.Data) == 0 {
 		return nil, "", errChatGPTEmptyRespData
@@ -85,12 +85,12 @@ func (o *OpenAI) GenerateText(ctx context.Context, prompt string) ([]byte, error
 			},
 		},
 	}
-	for i := 0; i < o.retryRequest; i++ {
+	for i := 0; i < o.retryCount; i++ {
 		resp, err = o.client.CreateChatCompletion(ctx, req)
 		if isSkipRetry(err) {
 			break
 		}
-		time.Sleep(time.Second * time.Duration(o.retryInterval))
+		time.Sleep(o.retryInterval)
 	}
 	if err != nil {
 		return nil, err

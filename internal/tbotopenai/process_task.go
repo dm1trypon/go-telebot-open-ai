@@ -27,11 +27,22 @@ func (t *TBotOpenAI) processTask(text string, chatID int64) ([]byte, string) {
 		t.log.Error("Get client command err:", zap.Error(err))
 		return nil, ""
 	}
+	username, err := t.clientStates.ClientUsername(chatID)
+	if err != nil {
+		t.log.Error("Get client username err:", zap.Error(err))
+		return nil, ""
+	}
 	f, ok := t.taskByCmd[command]
 	if !ok {
 		return []byte(respBodyUndefinedGeneration), ""
 	}
-	return f(text, chatID)
+	body, filename := f(text, chatID)
+	var response string
+	if filename == "" {
+		response = string(body)
+	}
+	t.writeStats(command, username, text, response)
+	return body, filename
 }
 
 func (t *TBotOpenAI) processCancelJob(text string, chatID int64) ([]byte, string) {
@@ -142,6 +153,19 @@ func (t *TBotOpenAI) processDreamBooth(text string, chatID int64) ([]byte, strin
 		body = []byte(respErrBodyCommandDreamBooth(err))
 	}
 	return body, fileName
+}
+
+func (t *TBotOpenAI) writeStats(command, username, request, response string) {
+	switch command {
+	case commandChatGPT, commandOpenAIImage, commandOpenAIText, commandDreamBooth:
+		t.stats.Write(statRow{
+			ts:       time.Now().UTC().String(),
+			username: username,
+			ai:       command,
+			request:  request,
+			response: response,
+		})
+	}
 }
 
 func randIntByRange(min, max int) int {
