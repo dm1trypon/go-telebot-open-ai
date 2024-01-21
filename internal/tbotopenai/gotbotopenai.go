@@ -38,13 +38,14 @@ type TBotOpenAI struct {
 	openAI           AI
 	chatGPTBot       AI
 	clientStates     clientStateByChatID
+	stats            *Stats
 	log              *zap.Logger
 	msgChan          chan *message
 	queueTaskChan    chan *message
 	userRoles        map[string]map[string]struct{}
 	permissions      map[string]map[string]struct{}
 	taskByCmd        map[string]func(text string, chatID int64) ([]byte, string)
-	clientStateByCmd map[string]func(command, username string, chatID int64) string
+	clientStateByCmd map[string]func(command, username string, chatID int64) (string, []byte)
 }
 
 func NewTBotOpenAI(cfg *Config, log *zap.Logger) (*TBotOpenAI, error) {
@@ -61,6 +62,7 @@ func NewTBotOpenAI(cfg *Config, log *zap.Logger) (*TBotOpenAI, error) {
 		openAI:        NewOpenAI(&cfg.OpenAI),
 		chatGPTBot:    NewChatGPTBot(),
 		clientStates:  clientStateByChatID{value: make(map[int64]*clientState)},
+		stats:         NewStats(log, cfg.Stats.Interval, cfg.Stats.Filepath),
 		log:           log,
 		msgChan:       msgChan,
 		queueTaskChan: queueTaskChan,
@@ -73,7 +75,7 @@ func NewTBotOpenAI(cfg *Config, log *zap.Logger) (*TBotOpenAI, error) {
 	g.taskByCmd[commandCancelJob] = g.processCancelJob
 	g.taskByCmd[commandOpenAIText] = g.processOpenAIText
 	g.taskByCmd[commandOpenAIImage] = g.processOpenAIImage
-	g.clientStateByCmd = make(map[string]func(command, username string, chatID int64) string, 11)
+	g.clientStateByCmd = make(map[string]func(command, username string, chatID int64) (string, []byte), 11)
 	g.clientStateByCmd[commandHelp] = g.commandHelp
 	g.clientStateByCmd[commandImageCustomExample] = g.commandDreamBoothExample
 	g.clientStateByCmd[commandStart] = g.commandStart
@@ -90,6 +92,10 @@ func NewTBotOpenAI(cfg *Config, log *zap.Logger) (*TBotOpenAI, error) {
 
 func (t *TBotOpenAI) Run() {
 	var wg sync.WaitGroup
+	if err := t.stats.Run(&wg); err != nil {
+		t.log.Error("Running Stats err", zap.Error(err))
+		return
+	}
 	t.initQueueTaskWorkers(&wg)
 	wg.Add(1)
 	go t.initProcessMessagesWorker(&wg)
@@ -99,6 +105,7 @@ func (t *TBotOpenAI) Run() {
 
 func (t *TBotOpenAI) Stop() {
 	t.telegram.Stop()
+	t.stats.Stop()
 	close(t.msgChan)
 	close(t.queueTaskChan)
 }
@@ -120,16 +127,22 @@ func (t *TBotOpenAI) initProcessMessagesWorker(wg *sync.WaitGroup) {
 				zap.String("user", msg.username),
 				zap.String("body", msg.text),
 				zap.String("command", msg.command))
-			body := t.checkChanMessagesBuffer()
-			if body != "" {
-				if err := t.telegram.ReplyText(msg.messageID, msg.chatID, body); err != nil {
+			respBody := t.checkChanMessagesBuffer()
+			if respBody != "" {
+				if err := t.telegram.ReplyText(msg.messageID, msg.chatID, respBody); err != nil {
 					t.log.Error("Reply message error:", zap.Error(err))
 				}
 				continue
 			}
-			body = t.processCommand(msg.command, msg.username, msg.chatID)
-			if body != "" {
-				if err := t.telegram.ReplyText(msg.messageID, msg.chatID, body); err != nil {
+			var fileBody []byte
+			respBody, fileBody = t.processCommand(msg.command, msg.username, msg.chatID)
+			if respBody != "" {
+				if err := t.telegram.ReplyText(msg.messageID, msg.chatID, respBody); err != nil {
+					t.log.Error("Reply message error:", zap.Error(err))
+				}
+				continue
+			} else if fileBody != nil {
+				if err := t.telegram.ReplyFile(msg.messageID, msg.chatID, fileBody, fileNameStats); err != nil {
 					t.log.Error("Reply message error:", zap.Error(err))
 				}
 				continue
@@ -137,9 +150,9 @@ func (t *TBotOpenAI) initProcessMessagesWorker(wg *sync.WaitGroup) {
 			if msg.text == "" {
 				continue
 			}
-			body = t.checkJobsLimit(msg.chatID)
-			if body != "" {
-				if err := t.telegram.ReplyText(msg.messageID, msg.chatID, body); err != nil {
+			respBody = t.checkJobsLimit(msg.chatID)
+			if respBody != "" {
+				if err := t.telegram.ReplyText(msg.messageID, msg.chatID, respBody); err != nil {
 					t.log.Error("Reply message error:", zap.Error(err))
 				}
 				continue

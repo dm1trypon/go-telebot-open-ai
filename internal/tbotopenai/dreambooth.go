@@ -44,7 +44,7 @@ const (
 
 type DreamBooth struct {
 	log          *zap.Logger
-	retryTimeout int
+	retryTimeout time.Duration
 	lastIDDBKey  int64
 	tokens       []string
 }
@@ -164,7 +164,7 @@ func (d *DreamBooth) processRetryFetchQueuedImages(ctx context.Context, requestI
 			if err == nil {
 				return outputURL, err
 			}
-			time.Sleep(time.Duration(d.retryTimeout) * time.Second)
+			time.Sleep(d.retryTimeout)
 		}
 	}
 }

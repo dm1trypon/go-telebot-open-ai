@@ -32,7 +32,8 @@ const (
 🌅 /dreamBooth - продвинутая генерация изображений, используя API DreamBooth
 📄 /dreamBoothExample - пример промпта для генерации изображения через API DreamBooth
 🔧 /help - описание команд`
-	respBodyUndefinedCommand         = "❌ Комманда не поддерживается. Чтобы посмотреть описание команд, введите команду /help"
+	respBodyUndefinedCommand = `❌ Комманда не поддерживается ❌
+Чтобы посмотреть описание команд, введите команду /help`
 	respBodyCommandDreamBoothExample = `prompt: Iron Man, (Arnold Tsang, Toru Nakayama), Masterpiece, Studio Quality, 6k , toa, toaair, 1boy, glowing, axe, mecha, science_fiction, solo, weapon, jungle , green_background, nature, outdoors, solo, tree, weapon, mask, dynamic lighting, detailed shading, digital texture painting
 negative_prompt: un-detailed skin, semi-realistic, cgi, 3d, render, sketch, cartoon, drawing, ugly eyes, (out of frame:1.3), worst quality, low quality, jpeg artifacts, cgi, sketch, cartoon, drawing, (out of frame:1.1)
 width: 512
