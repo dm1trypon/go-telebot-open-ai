@@ -22,13 +22,12 @@ telegram:
   token: telegram_token
   debug: false
   timeout: 100
-  reconnect_interval: 1
 chatgpt:
-  timeout: 10
+  timeout: 1m
 openai:
   token: token
   retry_interval: 5
-  timeout: 10
+  timeout: 10m
 dreambooth:
   tokens:
     - dd_token_1
@@ -36,12 +35,11 @@ dreambooth:
     - dd_token_3
     - dd_token_4
     - dd_token_5
-  retry_interval: 5
-  retry_count: 5
-  timeout: 10
+  retry_interval: 20s
+  timeout: 1h
 roles:
   admin:
-    - da_ponomarev
+    - test_username
   user:
     - *
 permissions:
@@ -56,6 +54,11 @@ permissions:
     - help
     - cancelJob
     - listJobs
+
+stats:
+  interval: 5s
+  filepath: "./stats/stats.csv"
+
 len_message_chan: 100
 len_queue_task_chan: 1000
 queue_message_workers: 4
