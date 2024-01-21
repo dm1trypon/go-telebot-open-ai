@@ -18,7 +18,7 @@ const (
 	commandHelp               = "help"
 	commandCancelJob          = "cancelJob"
 	commandListJobs           = "listJobs"
-	commandHistory            = "history"
+	commandStats              = "stats"
 )
 
 const (
@@ -86,7 +86,7 @@ func NewTBotOpenAI(cfg *Config, log *zap.Logger) (*TBotOpenAI, error) {
 	g.clientStateByCmd[commandOpenAIImage] = g.commandOpenAIImage
 	g.clientStateByCmd[commandCancelJob] = g.commandCancelJob
 	g.clientStateByCmd[commandListJobs] = g.commandListJobs
-	g.clientStateByCmd[commandHistory] = g.commandHistory
+	g.clientStateByCmd[commandStats] = g.commandStats
 	return g, nil
 }
 
