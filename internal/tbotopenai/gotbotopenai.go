@@ -46,7 +46,7 @@ type TBotOpenAI struct {
 	userRoles        map[string]map[string]struct{}
 	permissions      map[string]map[string]struct{}
 	taskByCmd        map[string]func(text string, chatID int64) ([]byte, string)
-	clientStateByCmd map[string]func(command, username string, chatID int64) (string, []byte)
+	clientStateByCmd map[string]func(command, username string, chatID int64) *commandResponse
 }
 
 func NewTBotOpenAI(cfg *Config, log *zap.Logger) (*TBotOpenAI, error) {
@@ -76,7 +76,7 @@ func NewTBotOpenAI(cfg *Config, log *zap.Logger) (*TBotOpenAI, error) {
 	g.taskByCmd[commandCancelJob] = g.processCancelJob
 	g.taskByCmd[commandOpenAIText] = g.processOpenAIText
 	g.taskByCmd[commandOpenAIImage] = g.processOpenAIImage
-	g.clientStateByCmd = make(map[string]func(command, username string, chatID int64) (string, []byte), 12)
+	g.clientStateByCmd = make(map[string]func(command, username string, chatID int64) *commandResponse, 12)
 	g.clientStateByCmd[commandHelp] = g.commandHelp
 	g.clientStateByCmd[commandImageCustomExample] = g.commandDreamBoothExample
 	g.clientStateByCmd[commandStart] = g.commandStart
@@ -136,15 +136,14 @@ func (t *TBotOpenAI) initProcessMessagesWorker(wg *sync.WaitGroup) {
 				}
 				continue
 			}
-			var fileBody []byte
-			respBody, fileBody = t.processCommand(msg.command, msg.username, msg.chatID)
-			if respBody != "" {
+			resp := t.processCommand(msg.command, msg.username, msg.chatID)
+			if resp != nil && resp.text != "" {
 				if err := t.telegram.ReplyText(msg.messageID, msg.chatID, respBody); err != nil {
 					t.log.Error("Reply message error:", zap.Error(err))
 				}
 				continue
-			} else if fileBody != nil {
-				if err := t.telegram.ReplyFile(msg.messageID, msg.chatID, fileBody, fileNameStats); err != nil {
+			} else if resp != nil && resp.fileBody != nil {
+				if err := t.telegram.ReplyFile(msg.messageID, msg.chatID, resp.fileBody, resp.fileName); err != nil {
 					t.log.Error("Reply message error:", zap.Error(err))
 				}
 				continue
