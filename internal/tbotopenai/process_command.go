@@ -108,7 +108,7 @@ func (t *TBotOpenAI) commandOpenAIText(command, _ string, chatID int64) *command
 	if err := t.clientStates.UpdateClientCommand(chatID, command); err != nil {
 		t.log.Error("Update client command err:", zap.Error(err))
 		return &commandResponse{
-			text: respBodyCommandChatGPT,
+			text: respBodySessionIsNotExist,
 		}
 	}
 	return &commandResponse{
@@ -120,7 +120,7 @@ func (t *TBotOpenAI) commandOpenAIImage(command, _ string, chatID int64) *comman
 	if err := t.clientStates.UpdateClientCommand(chatID, command); err != nil {
 		t.log.Error("Update client command err:", zap.Error(err))
 		return &commandResponse{
-			text: respBodyCommandOpenAIText,
+			text: respBodySessionIsNotExist,
 		}
 	}
 	return &commandResponse{
@@ -132,7 +132,7 @@ func (t *TBotOpenAI) commandCancelJob(command, _ string, chatID int64) *commandR
 	if err := t.clientStates.UpdateClientCommand(chatID, command); err != nil {
 		t.log.Error("Update client command err:", zap.Error(err))
 		return &commandResponse{
-			text: respBodyCommandOpenAIText,
+			text: respBodySessionIsNotExist,
 		}
 	}
 	return &commandResponse{
@@ -145,21 +145,21 @@ func (t *TBotOpenAI) commandListJobs(_, _ string, chatID int64) *commandResponse
 	if err != nil {
 		t.log.Error("Get ChatGPT jobs err:", zap.Error(err))
 		return &commandResponse{
-			text: respBodyCommandOpenAIText,
+			text: respBodySessionIsNotExist,
 		}
 	}
 	imgJobIDs, err := t.clientStates.ClientDreamBoothJobs(chatID)
 	if err != nil {
 		t.log.Error("Get DreamBooth jobs err:", zap.Error(err))
 		return &commandResponse{
-			text: respBodyCommandOpenAIText,
+			text: respBodySessionIsNotExist,
 		}
 	}
 	openAIIDs, err := t.clientStates.ClientOpenAIJobs(chatID)
 	if err != nil {
 		t.log.Error("Get OpenAI jobs err:", zap.Error(err))
 		return &commandResponse{
-			text: respBodyCommandOpenAIText,
+			text: respBodySessionIsNotExist,
 		}
 	}
 	return &commandResponse{
