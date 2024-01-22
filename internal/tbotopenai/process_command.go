@@ -1,6 +1,10 @@
 package tbotopenai
 
-import "go.uber.org/zap"
+import (
+	"os"
+
+	"go.uber.org/zap"
+)
 
 func (t *TBotOpenAI) processCommand(command, username string, chatID int64) (string, []byte) {
 	if command == "" {
@@ -113,4 +117,17 @@ func (t *TBotOpenAI) commandStats(_, _ string, _ int64) (string, []byte) {
 		return respBodyStatsCommand, nil
 	}
 	return "", t.stats.Bytes()
+}
+
+func (t *TBotOpenAI) commandLogs(_, _ string, _ int64) (string, []byte) {
+	if len(t.cfg.Logger.OutputPaths) == 0 {
+		t.log.Error("Empty output paths for logs")
+		return respErrBodyGetLogs, nil
+	}
+	logs, err := os.ReadFile(t.cfg.Logger.OutputPaths[0])
+	if err != nil {
+		t.log.Error("Reading log's file err:", zap.Error(err))
+		return respErrBodyGetLogs, nil
+	}
+	return "", logs
 }

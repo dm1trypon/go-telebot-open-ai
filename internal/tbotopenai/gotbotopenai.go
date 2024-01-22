@@ -19,6 +19,7 @@ const (
 	commandCancelJob          = "cancelJob"
 	commandListJobs           = "listJobs"
 	commandStats              = "stats"
+	commandLogs               = "logs"
 )
 
 const (
@@ -75,7 +76,7 @@ func NewTBotOpenAI(cfg *Config, log *zap.Logger) (*TBotOpenAI, error) {
 	g.taskByCmd[commandCancelJob] = g.processCancelJob
 	g.taskByCmd[commandOpenAIText] = g.processOpenAIText
 	g.taskByCmd[commandOpenAIImage] = g.processOpenAIImage
-	g.clientStateByCmd = make(map[string]func(command, username string, chatID int64) (string, []byte), 11)
+	g.clientStateByCmd = make(map[string]func(command, username string, chatID int64) (string, []byte), 12)
 	g.clientStateByCmd[commandHelp] = g.commandHelp
 	g.clientStateByCmd[commandImageCustomExample] = g.commandDreamBoothExample
 	g.clientStateByCmd[commandStart] = g.commandStart
@@ -87,6 +88,7 @@ func NewTBotOpenAI(cfg *Config, log *zap.Logger) (*TBotOpenAI, error) {
 	g.clientStateByCmd[commandCancelJob] = g.commandCancelJob
 	g.clientStateByCmd[commandListJobs] = g.commandListJobs
 	g.clientStateByCmd[commandStats] = g.commandStats
+	g.clientStateByCmd[commandLogs] = g.commandLogs
 	return g, nil
 }
 

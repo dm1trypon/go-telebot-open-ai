@@ -57,6 +57,7 @@ model_id: midjourney`
 	respErrBodyDreamBooth = `❌ Произошла ошибка при генерации изображения DreamBooth ❌
 Попробуйте еще раз`
 	respErrBodyJobCanceled = `✅ Запрос был отменен ✅`
+	respErrBodyGetLogs     = `❌ Произошла ошибка при получении логов ❌`
 )
 
 func respErrBodyCommandDreamBooth(err error) string {
