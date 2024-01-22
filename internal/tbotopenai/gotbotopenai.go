@@ -138,7 +138,7 @@ func (t *TBotOpenAI) initProcessMessagesWorker(wg *sync.WaitGroup) {
 			}
 			resp := t.processCommand(msg.command, msg.username, msg.chatID)
 			if resp != nil && resp.text != "" {
-				if err := t.telegram.ReplyText(msg.messageID, msg.chatID, respBody); err != nil {
+				if err := t.telegram.ReplyText(msg.messageID, msg.chatID, resp.text); err != nil {
 					t.log.Error("Reply message error:", zap.Error(err))
 				}
 				continue
