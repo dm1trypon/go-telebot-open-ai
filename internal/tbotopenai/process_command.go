@@ -2,8 +2,8 @@ package tbotopenai
 
 import (
 	"bufio"
-	"bytes"
 	"os"
+	"strings"
 
 	"go.uber.org/zap"
 )
@@ -202,9 +202,12 @@ func (t *TBotOpenAI) commandLogs(_, _ string, _ int64) *commandResponse {
 		}
 	}()
 	scanner := bufio.NewScanner(file)
-	rows := make([][]byte, 0, t.cfg.MaxLogRows)
+	rows := make([]string, 0, t.cfg.MaxLogRows)
 	for scanner.Scan() {
-		row := scanner.Bytes()
+		row := scanner.Text()
+		if !strings.HasSuffix(row, "\n") && !strings.HasSuffix(row, "\r") {
+			row += "\n"
+		}
 		rows = append(rows, row)
 		if len(rows) > t.cfg.MaxLogRows {
 			rows = rows[1:]
@@ -218,6 +221,6 @@ func (t *TBotOpenAI) commandLogs(_, _ string, _ int64) *commandResponse {
 	}
 	return &commandResponse{
 		fileName: fileNameLogs,
-		fileBody: bytes.Join(rows, []byte("\n\r")),
+		fileBody: []byte(strings.Join(rows, "")),
 	}
 }
