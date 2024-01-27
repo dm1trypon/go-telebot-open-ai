@@ -65,3 +65,4 @@ queue_message_workers: 4
 max_client_dreambooth_jobs: 2
 max_client_openai_jobs: 2
 max_client_chatgpt_jobs: 2
+max_log_rows: 100

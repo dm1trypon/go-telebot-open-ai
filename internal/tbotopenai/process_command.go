@@ -1,6 +1,8 @@
 package tbotopenai
 
 import (
+	"bufio"
+	"bytes"
 	"os"
 
 	"go.uber.org/zap"
@@ -187,15 +189,35 @@ func (t *TBotOpenAI) commandLogs(_, _ string, _ int64) *commandResponse {
 			text: respErrBodyGetLogs,
 		}
 	}
-	logs, err := os.ReadFile(t.cfg.Logger.OutputPaths[0])
+	file, err := os.Open(t.cfg.Logger.OutputPaths[0])
 	if err != nil {
 		t.log.Error("Reading log's file err:", zap.Error(err))
 		return &commandResponse{
 			text: respErrBodyGetLogs,
 		}
 	}
+	defer func() {
+		if err = file.Close(); err != nil {
+			t.log.Error("Close log's file err:", zap.Error(err))
+		}
+	}()
+	scanner := bufio.NewScanner(file)
+	rows := make([][]byte, 0, t.cfg.MaxLogRows)
+	for scanner.Scan() {
+		row := scanner.Bytes()
+		rows = append(rows, row)
+		if len(rows) > t.cfg.MaxLogRows {
+			rows = rows[1:]
+		}
+	}
+	if err = scanner.Err(); err != nil {
+		t.log.Error("Scanner log's file err:", zap.Error(err))
+		return &commandResponse{
+			text: respErrBodyGetLogs,
+		}
+	}
 	return &commandResponse{
 		fileName: fileNameLogs,
-		fileBody: logs,
+		fileBody: bytes.Join(rows, []byte("\n\r")),
 	}
 }
