@@ -33,7 +33,11 @@ func (t *TBotOpenAI) processTask(text string, chatID int64) ([]byte, string) {
 		t.log.Error("Get client username err:", zap.Error(err))
 		return nil, ""
 	}
-	f, ok := t.taskByCmd[command]
+	val, ok := t.taskByCmd.Load(command)
+	if !ok {
+		return []byte(respBodyUndefinedGeneration), ""
+	}
+	f, ok := val.(func(text string, chatID int64) (body []byte, fileName string))
 	if !ok {
 		return []byte(respBodyUndefinedGeneration), ""
 	}
@@ -160,7 +164,7 @@ func (t *TBotOpenAI) writeStats(command, username, request, response string) {
 	switch command {
 	case commandChatGPT, commandOpenAIImage, commandOpenAIText, commandDreamBooth:
 		t.stats.Write(statRow{
-			ts:       time.Now().UTC().String(),
+			ts:       time.Now().String(),
 			username: username,
 			ai:       command,
 			request:  request,
@@ -169,10 +173,31 @@ func (t *TBotOpenAI) writeStats(command, username, request, response string) {
 	}
 }
 
+func (t *TBotOpenAI) processBan(text string, _ int64) ([]byte, string) {
+	_, ok := t.blacklist.LoadOrStore(text, struct{}{})
+	if ok {
+		return []byte(respErrBodyRequestBanUsernameAlreadyExist), ""
+	}
+	if err := t.writeBlacklistToFile(); err != nil {
+		return []byte(respErrBodyRequestBan), ""
+	}
+	return []byte(respBodyRequestBan), ""
+}
+
+func (t *TBotOpenAI) processUnban(text string, _ int64) ([]byte, string) {
+	_, ok := t.blacklist.LoadAndDelete(text)
+	if !ok {
+		return []byte(respErrBodyRequestUnbanUsernameIsNotExist), ""
+	}
+	if err := t.writeBlacklistToFile(); err != nil {
+		return []byte(respErrBodyRequestUnban), ""
+	}
+	return []byte(respBodyRequestUnban), ""
+}
+
 func prepareResponse(response string) string {
 	response = strings.ReplaceAll(response, "\n", "")
-	response = strings.ReplaceAll(response, "\r", "")
-	return response
+	return strings.ReplaceAll(response, "\r", "")
 }
 
 func randIntByRange(min, max int) int {

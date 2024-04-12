@@ -2,13 +2,17 @@ package tbotopenai
 
 import (
 	"bufio"
+	"bytes"
 	"os"
 	"strings"
 
 	"go.uber.org/zap"
 )
 
-const fileNameLogs = "logs.log"
+const (
+	fileNameLogs      = "logs.log"
+	fileNameBlacklist = "blacklist.txt"
+)
 
 type commandResponse struct {
 	text     string
@@ -25,7 +29,13 @@ func (t *TBotOpenAI) processCommand(command, username string, chatID int64) *com
 			text: respBodyUndefinedCommand,
 		}
 	}
-	f, ok := t.clientStateByCmd[command]
+	val, ok := t.clientStateByCmd.Load(command)
+	if !ok {
+		return &commandResponse{
+			text: respBodyUndefinedCommand,
+		}
+	}
+	f, ok := val.(func(command, username string, chatID int64) *commandResponse)
 	if !ok {
 		return &commandResponse{
 			text: respBodyUndefinedCommand,
@@ -222,5 +232,46 @@ func (t *TBotOpenAI) commandLogs(_, _ string, _ int64) *commandResponse {
 	return &commandResponse{
 		fileName: fileNameLogs,
 		fileBody: []byte(strings.Join(rows, "")),
+	}
+}
+
+func (t *TBotOpenAI) commandBan(command, _ string, chatID int64) *commandResponse {
+	if err := t.clientStates.UpdateClientCommand(chatID, command); err != nil {
+		t.log.Error("Update client command err:", zap.Error(err))
+		return &commandResponse{
+			text: respBodySessionIsNotExist,
+		}
+	}
+	return &commandResponse{
+		text: respBodyCommandBan,
+	}
+}
+
+func (t *TBotOpenAI) commandUnban(command, _ string, chatID int64) *commandResponse {
+	if err := t.clientStates.UpdateClientCommand(chatID, command); err != nil {
+		t.log.Error("Update client command err:", zap.Error(err))
+		return &commandResponse{
+			text: respBodySessionIsNotExist,
+		}
+	}
+	return &commandResponse{
+		text: respBodyCommandUnban,
+	}
+}
+
+func (t *TBotOpenAI) commandBlacklist(_, _ string, _ int64) *commandResponse {
+	body, err := os.ReadFile(t.cfg.PathBlackList)
+	if err != nil {
+		t.log.Error("Reading blacklist's file err:", zap.Error(err))
+		return &commandResponse{
+			text: respErrBodyGetLogs,
+		}
+	}
+	var b bytes.Buffer
+	b.WriteString("Список заблокированных пользователей:\n")
+	b.Write(body)
+	return &commandResponse{
+		fileName: fileNameBlacklist,
+		fileBody: b.Bytes(),
 	}
 }
