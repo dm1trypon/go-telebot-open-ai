@@ -24,6 +24,7 @@ type Config struct {
 	MaxClientChatGPTJobs    int                `yaml:"max_client_chatgpt_jobs"`
 	MaxClientDreamBoothJobs int                `yaml:"max_client_dreambooth_jobs"`
 	MaxLogRows              int                `yaml:"max_log_rows"`
+	PathBlackList           string             `yaml:"path_blacklist"`
 }
 
 type TelegramSettings struct {

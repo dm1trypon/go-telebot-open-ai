@@ -1,7 +1,10 @@
 package tbotopenai
 
 import (
+	"bytes"
 	"context"
+	"os"
+	"strings"
 	"sync"
 
 	"go.uber.org/zap"
@@ -20,6 +23,9 @@ const (
 	commandListJobs           = "listJobs"
 	commandStats              = "stats"
 	commandLogs               = "logs"
+	commandBan                = "ban"
+	commandUnban              = "unban"
+	commandBlacklist          = "blacklist"
 )
 
 const (
@@ -43,10 +49,11 @@ type TBotOpenAI struct {
 	log              *zap.Logger
 	msgChan          chan *message
 	queueTaskChan    chan *message
-	userRoles        map[string]map[string]struct{}
-	permissions      map[string]map[string]struct{}
-	taskByCmd        map[string]func(text string, chatID int64) ([]byte, string)
-	clientStateByCmd map[string]func(command, username string, chatID int64) *commandResponse
+	userRoles        sync.Map
+	permissions      sync.Map
+	taskByCmd        sync.Map
+	clientStateByCmd sync.Map
+	blacklist        sync.Map
 }
 
 func NewTBotOpenAI(cfg *Config, log *zap.Logger) (*TBotOpenAI, error) {
@@ -56,7 +63,7 @@ func NewTBotOpenAI(cfg *Config, log *zap.Logger) (*TBotOpenAI, error) {
 	if err != nil {
 		return nil, err
 	}
-	g := &TBotOpenAI{
+	t := &TBotOpenAI{
 		cfg:           cfg,
 		telegram:      telegram,
 		dreamBooth:    NewDreamBoothAPI(log, &cfg.DreamBooth),
@@ -68,28 +75,34 @@ func NewTBotOpenAI(cfg *Config, log *zap.Logger) (*TBotOpenAI, error) {
 		msgChan:       msgChan,
 		queueTaskChan: queueTaskChan,
 	}
-	g.setUserRoles(&cfg.Roles)
-	g.setPermissions(&cfg.Permissions)
-	g.taskByCmd = make(map[string]func(text string, chatID int64) (body []byte, fileName string), 5)
-	g.taskByCmd[commandChatGPT] = g.processChatGPT
-	g.taskByCmd[commandDreamBooth] = g.processDreamBooth
-	g.taskByCmd[commandCancelJob] = g.processCancelJob
-	g.taskByCmd[commandOpenAIText] = g.processOpenAIText
-	g.taskByCmd[commandOpenAIImage] = g.processOpenAIImage
-	g.clientStateByCmd = make(map[string]func(command, username string, chatID int64) *commandResponse, 12)
-	g.clientStateByCmd[commandHelp] = g.commandHelp
-	g.clientStateByCmd[commandImageCustomExample] = g.commandDreamBoothExample
-	g.clientStateByCmd[commandStart] = g.commandStart
-	g.clientStateByCmd[commandStop] = g.commandStop
-	g.clientStateByCmd[commandChatGPT] = g.commandChatGPT
-	g.clientStateByCmd[commandDreamBooth] = g.commandDreamBooth
-	g.clientStateByCmd[commandOpenAIText] = g.commandOpenAIText
-	g.clientStateByCmd[commandOpenAIImage] = g.commandOpenAIImage
-	g.clientStateByCmd[commandCancelJob] = g.commandCancelJob
-	g.clientStateByCmd[commandListJobs] = g.commandListJobs
-	g.clientStateByCmd[commandStats] = g.commandStats
-	g.clientStateByCmd[commandLogs] = g.commandLogs
-	return g, nil
+	t.setUserRoles(&cfg.Roles)
+	t.setPermissions(&cfg.Permissions)
+	t.taskByCmd.Store(commandChatGPT, t.processChatGPT)
+	t.taskByCmd.Store(commandDreamBooth, t.processDreamBooth)
+	t.taskByCmd.Store(commandCancelJob, t.processCancelJob)
+	t.taskByCmd.Store(commandOpenAIText, t.processOpenAIText)
+	t.taskByCmd.Store(commandOpenAIImage, t.processOpenAIImage)
+	t.taskByCmd.Store(commandBan, t.processBan)
+	t.taskByCmd.Store(commandUnban, t.processUnban)
+	t.clientStateByCmd.Store(commandHelp, t.commandHelp)
+	t.clientStateByCmd.Store(commandImageCustomExample, t.commandDreamBoothExample)
+	t.clientStateByCmd.Store(commandStart, t.commandStart)
+	t.clientStateByCmd.Store(commandStop, t.commandStop)
+	t.clientStateByCmd.Store(commandChatGPT, t.commandChatGPT)
+	t.clientStateByCmd.Store(commandDreamBooth, t.commandDreamBooth)
+	t.clientStateByCmd.Store(commandOpenAIText, t.commandOpenAIText)
+	t.clientStateByCmd.Store(commandOpenAIImage, t.commandOpenAIImage)
+	t.clientStateByCmd.Store(commandCancelJob, t.commandCancelJob)
+	t.clientStateByCmd.Store(commandListJobs, t.commandListJobs)
+	t.clientStateByCmd.Store(commandStats, t.commandStats)
+	t.clientStateByCmd.Store(commandLogs, t.commandLogs)
+	t.clientStateByCmd.Store(commandBan, t.commandBan)
+	t.clientStateByCmd.Store(commandUnban, t.commandUnban)
+	t.clientStateByCmd.Store(commandBlacklist, t.commandBlacklist)
+	if err = t.storeBlacklist(); err != nil {
+		return nil, err
+	}
+	return t, nil
 }
 
 func (t *TBotOpenAI) Run() {
@@ -129,6 +142,12 @@ func (t *TBotOpenAI) initProcessMessagesWorker(wg *sync.WaitGroup) {
 				zap.String("user", msg.username),
 				zap.String("body", msg.text),
 				zap.String("command", msg.command))
+			if t.isBanned(msg.username) {
+				if err := t.telegram.ReplyText(msg.messageID, msg.chatID, respBodyAccessDenied); err != nil {
+					t.log.Error("Reply message error:", zap.Error(err))
+				}
+				continue
+			}
 			respBody := t.checkChanMessagesBuffer()
 			if respBody != "" {
 				if err := t.telegram.ReplyText(msg.messageID, msg.chatID, respBody); err != nil {
@@ -266,4 +285,53 @@ func (t *TBotOpenAI) checkChanMessagesBuffer() string {
 		return respErrBodyLimitMessages
 	}
 	return ""
+}
+
+func (t *TBotOpenAI) storeBlacklist() error {
+	f, err := os.OpenFile(t.cfg.PathBlackList, os.O_CREATE|os.O_RDONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err = f.Close(); err != nil {
+			t.log.Error("Open blacklist's file err", zap.Error(err))
+		}
+	}()
+	fStat, err := f.Stat()
+	if err != nil {
+		t.log.Error("Read stat blacklist's file err", zap.Error(err))
+		return err
+	}
+	body := make([]byte, fStat.Size())
+	if _, err = f.Read(body); err != nil {
+		t.log.Error("Read blacklist's file err", zap.Error(err))
+		return err
+	}
+	if len(body) == 0 {
+		return nil
+	}
+	strBody := string(body)
+	strBody = strings.ReplaceAll(strBody, "\r", "")
+	rows := strings.Split(strBody, "\n")
+	for _, row := range rows {
+		t.blacklist.Store(row, struct{}{})
+	}
+	return nil
+}
+
+func (t *TBotOpenAI) writeBlacklistToFile() error {
+	var b bytes.Buffer
+	t.blacklist.Range(func(k, v any) bool {
+		username, ok := k.(string)
+		if !ok {
+			return false
+		}
+		b.WriteString(username + "\n")
+		return true
+	})
+	err := os.WriteFile(t.cfg.PathBlackList, b.Bytes(), 0644)
+	if err != nil {
+		t.log.Error("Write blacklist's file err", zap.Error(err))
+	}
+	return err
 }

@@ -23,7 +23,7 @@ const (
 	respBodyCommandOpenAIImage = `🌄 Генерация изображений с помощью OpenAI 🌄
 Введите запрос как можно подробнее, чтобы получить наиболее удовлетворительное сгенерированное изображение`
 	respBodyCommandDreamBooth = `🌅 Выбрана генерация изображений с помощью DreamBooth 🌅
-⚠ Для лучшего результата ознакомтесь с документацией https://stablediffusionapi.com/docs/community-models-api-v4/dreamboothtext2img#body-attributes ⚠
+⚠ Для лучшего результата ознакомьтесь с документацией https://stablediffusionapi.com/docs/community-models-api-v4/dreamboothtext2img#body-attributes ⚠
 📄 /dreamBoothExample - пример промпта для генерации изображения через API DreamBooth`
 	respBodyUndefinedGeneration = `❌ Не выбран AI для генерации ❌
 📖 /chatGPT - генерация текста, используя API ресурса chatgptbot.ru (Модель gpt-3.5-turbo-1106)
@@ -34,6 +34,7 @@ const (
 🔧 /help - описание команд`
 	respBodyUndefinedCommand = `❌ Комманда не поддерживается ❌
 Чтобы посмотреть описание команд, введите команду /help`
+	respBodyAccessDenied             = `❌ Доступ запрещен ❌`
 	respBodyCommandDreamBoothExample = `prompt: Iron Man, (Arnold Tsang, Toru Nakayama), Masterpiece, Studio Quality, 6k , toa, toaair, 1boy, glowing, axe, mecha, science_fiction, solo, weapon, jungle , green_background, nature, outdoors, solo, tree, weapon, mask, dynamic lighting, detailed shading, digital texture painting
 negative_prompt: un-detailed skin, semi-realistic, cgi, 3d, render, sketch, cartoon, drawing, ugly eyes, (out of frame:1.3), worst quality, low quality, jpeg artifacts, cgi, sketch, cartoon, drawing, (out of frame:1.1)
 width: 512
@@ -41,9 +42,17 @@ height: 512
 model_id: midjourney`
 	respBodyInputJobID = `📛 Введите номер запроса 📛
 📋 /listJobs - список выполняющихся запросов в очереди`
-	respBodyRequestAddedToQueue = `✅ Запрос добавлен в очередь ✅`
-	respBodyStatsCommand        = `☣ Здесь должен быть файл со статистикой запросов и ответов ☣`
-	respErrBodyLimitMessages    = `❌ Сервис перегружен запросами ❌
+	respBodyRequestAddedToQueue               = `✅ Запрос добавлен в очередь ✅`
+	respBodyStatsCommand                      = `☣ Здесь должен быть файл со статистикой запросов и ответов ☣`
+	respBodyCommandBan                        = `🌄 Введите имя пользователя для бана 🌄`
+	respBodyCommandUnban                      = `🌄 Введите имя пользователя для разбана 🌄`
+	respBodyRequestBan                        = `✅ Пользователь забанен ✅`
+	respBodyRequestUnban                      = `✅ Пользователь разбанен ✅`
+	respErrBodyRequestBan                     = `❌ Произошла ошибка при бане пользователя ❌`
+	respErrBodyRequestUnban                   = `❌ Произошла ошибка при разбане пользователя ❌`
+	respErrBodyRequestUnbanUsernameIsNotExist = `❌ Пользователя нет в черном списке ❌`
+	respErrBodyRequestBanUsernameAlreadyExist = `❌ Пользователь уже есть в черном списке ❌`
+	respErrBodyLimitMessages                  = `❌ Сервис перегружен запросами ❌
 Пожалуйста, выполните запрос позже`
 	respErrBodyLimitJobs = `❌ Превышен лимит запросов ❌
 Пожалуйста, дождитесь выполнения прошлых и повторите`
@@ -115,16 +124,19 @@ func respBodyCommandHelp(role string) string {
 	if role == roleAdmin {
 		b.WriteString(`📖 /openAIText - генерация текста, используя API OpenAI (Модель gpt-4-32k-0613)
 🌄 /openAIImage - генерация изображения размером 1024x1024, используя API OpenAI
+🌅 /dreamBooth - продвинутая генерация изображений, используя API DreamBooth
+📄 /dreamBoothExample - пример промпта для генерации изображения через API DreamBooth
 `)
 	}
-	b.WriteString(`🌅 /dreamBooth - продвинутая генерация изображений, используя API DreamBooth
-📄 /dreamBoothExample - пример промпта для генерации изображения через API DreamBooth
-📛 /cancelJob - отмена текущего запроса по ее номеру
+	b.WriteString(`📛 /cancelJob - отмена текущего запроса по ее номеру
 📋 /listJobs - список выполняющихся запросов в очереди
 `)
 	if role == roleAdmin {
 		b.WriteString(`📈 /stats - статистика запросов и ответов всех пользователей в формате csv
 💻 /logs - логи сервиса
+👎 /ban - бан пользователя
+👍 /unban - разбан пользователя
+💩 /blacklist - список заблокированных пользователей
 `)
 	}
 	return b.String()

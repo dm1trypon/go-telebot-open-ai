@@ -11,10 +11,8 @@ func (t *TBotOpenAI) setUserRoles(roles *RolesSettings) {
 	for _, username := range roles.Users {
 		users[username] = struct{}{}
 	}
-	t.userRoles = map[string]map[string]struct{}{
-		roleAdmin: admins,
-		roleUser:  users,
-	}
+	t.userRoles.Store(roleAdmin, admins)
+	t.userRoles.Store(roleUser, users)
 }
 
 func (t *TBotOpenAI) setPermissions(permissions *PermissionSettings) {
@@ -26,10 +24,8 @@ func (t *TBotOpenAI) setPermissions(permissions *PermissionSettings) {
 	for _, command := range permissions.UserCommands {
 		userCommands[command] = struct{}{}
 	}
-	t.permissions = map[string]map[string]struct{}{
-		roleAdmin: adminCommands,
-		roleUser:  userCommands,
-	}
+	t.permissions.Store(roleAdmin, adminCommands)
+	t.permissions.Store(roleUser, userCommands)
 }
 
 func (t *TBotOpenAI) checkPermissions(command, username string) bool {
@@ -37,10 +33,18 @@ func (t *TBotOpenAI) checkPermissions(command, username string) bool {
 	if curRole == "" {
 		return false
 	}
-	if _, ok := t.permissions[curRole][anyUser]; ok {
+	val, ok := t.permissions.Load(curRole)
+	if !ok {
+		return false
+	}
+	permissions, ok := val.(map[string]struct{})
+	if !ok {
+		return false
+	}
+	if _, ok = permissions[anyUser]; ok {
 		return true
 	}
-	if _, ok := t.permissions[curRole][command]; ok {
+	if _, ok = permissions[command]; ok {
 		return true
 	}
 	return false
@@ -49,14 +53,27 @@ func (t *TBotOpenAI) checkPermissions(command, username string) bool {
 func (t *TBotOpenAI) getRole(username string) string {
 	var curRole string
 	for _, role := range []string{roleAdmin, roleUser} {
-		if _, ok := t.userRoles[role][anyUser]; ok {
+		val, ok := t.userRoles.Load(role)
+		if !ok {
+			continue
+		}
+		roles, ok := val.(map[string]struct{})
+		if !ok {
+			continue
+		}
+		if _, ok = roles[anyUser]; ok {
 			curRole = role
 			break
 		}
-		if _, ok := t.userRoles[role][username]; ok {
+		if _, ok = roles[username]; ok {
 			curRole = role
 			break
 		}
 	}
 	return curRole
+}
+
+func (t *TBotOpenAI) isBanned(username string) bool {
+	_, ok := t.blacklist.Load(username)
+	return username == "" || ok
 }

@@ -49,8 +49,6 @@ permissions:
     - start
     - stop
     - chatGPT
-    - dreamBooth
-    - dreamBoothExample
     - help
     - cancelJob
     - listJobs
@@ -66,3 +64,4 @@ max_client_dreambooth_jobs: 2
 max_client_openai_jobs: 2
 max_client_chatgpt_jobs: 2
 max_log_rows: 100
+path_blacklist: "./blacklist"
