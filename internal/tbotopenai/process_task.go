@@ -163,8 +163,13 @@ func (t *TBotOpenAI) processDreamBooth(text string, chatID int64) ([]byte, strin
 func (t *TBotOpenAI) writeStats(command, username, request, response string) {
 	switch command {
 	case commandChatGPT, commandOpenAIImage, commandOpenAIText, commandDreamBooth:
+		loc, err := time.LoadLocation("Europe/Moscow")
+		if err != nil {
+			t.log.Error("Load location err:", zap.Error(err))
+			return
+		}
 		t.stats.Write(statRow{
-			ts:       time.Now().String(),
+			ts:       time.Now().In(loc).Format(time.RFC3339),
 			username: username,
 			ai:       command,
 			request:  request,
