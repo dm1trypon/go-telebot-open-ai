@@ -23,7 +23,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Can not create logger: %v", err)
 	}
-	defer logger.Sync()
+	defer func() {
+		if err = logger.Sync(); err != nil {
+			log.Fatalf("logger sync err: %v", err)
+		}
+	}()
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Error("Recovered panic err:", zap.Any("panic", r))

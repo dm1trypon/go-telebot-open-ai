@@ -25,12 +25,7 @@ const (
 	respBodyCommandDreamBooth = `🌅 Выбрана генерация изображений с помощью DreamBooth 🌅
 ⚠ Для лучшего результата ознакомьтесь с документацией https://stablediffusionapi.com/docs/community-models-api-v4/dreamboothtext2img#body-attributes ⚠
 📄 /dreamBoothExample - пример промпта для генерации изображения через API DreamBooth`
-	respBodyUndefinedGeneration = `❌ Не выбран AI для генерации ❌
-📖 /chatGPT - генерация текста, используя API ресурса chatgptbot.ru (Модель gpt-3.5-turbo-1106)
-📖 /openAIText - генерация текста, используя API OpenAI (Модель gpt-4-32k-0613)
-🌄 /openAIImage - генерация изображения размером 1024x1024, используя API OpenAI
-🌅 /dreamBooth - продвинутая генерация изображений, используя API DreamBooth
-📄 /dreamBoothExample - пример промпта для генерации изображения через API DreamBooth
+	respBodyUndefinedJob = `❌ Не выбрана команда для выполнения задачи ❌
 🔧 /help - описание команд`
 	respBodyUndefinedCommand = `❌ Комманда не поддерживается ❌
 Чтобы посмотреть описание команд, введите команду /help`
@@ -42,12 +37,37 @@ height: 512
 model_id: midjourney`
 	respBodyInputJobID = `📛 Введите номер запроса 📛
 📋 /listJobs - список выполняющихся запросов в очереди`
-	respBodyRequestAddedToQueue               = `✅ Запрос добавлен в очередь ✅`
-	respBodyStatsCommand                      = `☣ Здесь должен быть файл со статистикой запросов и ответов ☣`
-	respBodyCommandBan                        = `🌄 Введите имя пользователя для бана 🌄`
-	respBodyCommandUnban                      = `🌄 Введите имя пользователя для разбана 🌄`
-	respBodyRequestBan                        = `✅ Пользователь забанен ✅`
-	respBodyRequestUnban                      = `✅ Пользователь разбанен ✅`
+	respBodyRequestAddedToQueue = `✅ Запрос добавлен в очередь ✅`
+	respBodyStatsCommand        = `☣ Здесь должен быть файл со статистикой запросов и ответов ☣`
+	respBodyCommandBan          = `🌄 Введите имя пользователя для бана 🌄`
+	respBodyCommandUnban        = `🌄 Введите имя пользователя для разбана 🌄`
+	respBodyRequestBan          = `✅ Пользователь забанен ✅`
+	respBodyRequestUnban        = `✅ Пользователь разбанен ✅`
+	respBodyCommandFusionBrain  = `🌅 Выбрана генерация изображений с помощью FusionBrain 🌅
+📄 /fusionBrainExample - пример запроса для генерации изображения через API FusionBrain`
+	respBodyCommandFusionBrainExample = `Порядок заполнения запроса для генерации изабражения с помощью Fusion Brain API:
+1 - (обязательно для заполнения) какие цвета и приёмы модель должна использовать при генерации изображения
+2 - какие цвета и приёмы модель не должна использовать при генерации изображения
+3 - (если не задано, по-умолчанию будет 512) длина изображения
+4 - (если не задано, по-умолчанию будет 512) ширина изображения
+5 - (если не задано, по-умолчанию будет DEFAULT) стиль изображения:
+	- KANDINSKY https://cdn.fusionbrain.ai/static/download/img-style-kandinsky.png
+	- UHD https://cdn.fusionbrain.ai/static/download/img-style-detail-photo.png
+	- ANIME https://cdn.fusionbrain.ai/static/download/img-style-anime.png
+	- DEFAULT https://cdn.fusionbrain.ai/static/download/img-style-personal.png
+Если какой-то параметр не нужен, оставляем строку пустой и переходим на следующую строку, например:
+Пушистый кот в очках
+
+1024
+1024
+DEFAULT
+- вторая строка пустая, или:
+Пушистый кот в очках
+яркие цвета, кислотность, высокая контрастность
+1024
+1024
+
+- строка после ширины пустая, будет использован стиль по-умолчанию - DEFAULT`
 	respErrBodyRequestBan                     = `❌ Произошла ошибка при бане пользователя ❌`
 	respErrBodyRequestUnban                   = `❌ Произошла ошибка при разбане пользователя ❌`
 	respErrBodyRequestUnbanUsernameIsNotExist = `❌ Пользователя нет в черном списке ❌`
@@ -64,6 +84,8 @@ model_id: midjourney`
 	respErrBodyDreamBoothByStatusCode = `❌ Произошла ошибка при генерации ответа DreamBooth ❌
 К сожалению, в данный момент сервис DreamBooth не работает, попробуйте выполнить запрос позже`
 	respErrBodyDreamBooth = `❌ Произошла ошибка при генерации изображения DreamBooth ❌
+Попробуйте еще раз`
+	respErrBodyFusionBrain = `❌ Произошла ошибка при генерации изображения FusionBrain ❌
 Попробуйте еще раз`
 	respErrBodyJobCanceled = `✅ Запрос был отменен ✅`
 	respErrBodyGetLogs     = `❌ Произошла ошибка при получении логов ❌`
@@ -90,25 +112,33 @@ func respBodySuccessCancelJob(api string, jobID int) []byte {
 	b.WriteString(api)
 	b.WriteString(" №")
 	b.WriteString(strconv.Itoa(jobID))
-	b.WriteString(" завершена")
+	b.WriteString(" завершена.\n")
+	b.WriteString(respBodyInputJobID)
 	return b.Bytes()
 }
 
-func respBodyListJobs(textJobIDs, imgJobIDs, openAIIDs []int) string {
+func respBodyListJobs(textJobIDs, imgJobIDs, openAIIDs, fusionBrainIDs []int, role string) string {
 	var b strings.Builder
 	b.WriteString("Список задач ChatGPT:\r\n")
 	for i := range textJobIDs {
 		b.WriteString(strconv.Itoa(textJobIDs[i]))
 		b.WriteString("\r\n")
 	}
-	b.WriteString("Список задач DreamBooth:\r\n")
-	for i := range imgJobIDs {
-		b.WriteString(strconv.Itoa(imgJobIDs[i]))
-		b.WriteString("\r\n")
+	if role == roleAdmin {
+		b.WriteString("Список задач DreamBooth:\r\n")
+		for i := range imgJobIDs {
+			b.WriteString(strconv.Itoa(imgJobIDs[i]))
+			b.WriteString("\r\n")
+		}
+		b.WriteString("Список задач OpenAI:\r\n")
+		for i := range openAIIDs {
+			b.WriteString(strconv.Itoa(openAIIDs[i]))
+			b.WriteString("\r\n")
+		}
 	}
-	b.WriteString("Список задач OpenAI:\r\n")
-	for i := range openAIIDs {
-		b.WriteString(strconv.Itoa(openAIIDs[i]))
+	b.WriteString("Список задач FusionBrain:\r\n")
+	for i := range fusionBrainIDs {
+		b.WriteString(strconv.Itoa(fusionBrainIDs[i]))
 		b.WriteString("\r\n")
 	}
 	return b.String()
@@ -120,6 +150,8 @@ func respBodyCommandHelp(role string) string {
 ✅ /start - начало сессии с ботом
 ⛔ /stop - завершение сессии с ботом
 📖 /chatGPT - генерация текста, используя API ресурса chatgptbot.ru (Модель gpt-3.5-turbo-1106)
+🌅 /fusionBrain - продвинутая генерация изображений, используя API FusionBrain
+📄 /fusionBrainExample - пример промпта для генерации изображения через API FusionBrain
 `)
 	if role == roleAdmin {
 		b.WriteString(`📖 /openAIText - генерация текста, используя API OpenAI (Модель gpt-4-32k-0613)

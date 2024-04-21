@@ -35,11 +35,11 @@ func (t *TBotOpenAI) processTask(text string, chatID int64) ([]byte, string) {
 	}
 	val, ok := t.taskByCmd.Load(command)
 	if !ok {
-		return []byte(respBodyUndefinedGeneration), ""
+		return []byte(respBodyUndefinedJob), ""
 	}
 	f, ok := val.(func(text string, chatID int64) (body []byte, fileName string))
 	if !ok {
-		return []byte(respBodyUndefinedGeneration), ""
+		return []byte(respBodyUndefinedJob), ""
 	}
 	body, filename := f(text, chatID)
 	var response string
@@ -156,6 +156,29 @@ func (t *TBotOpenAI) processDreamBooth(text string, chatID int64) ([]byte, strin
 	if err != nil {
 		t.log.Error("DreamBooth response err:", zap.Error(err))
 		body = []byte(respErrBodyCommandDreamBooth(err))
+	}
+	return body, fileName
+}
+
+func (t *TBotOpenAI) processFusionBrain(text string, chatID int64) ([]byte, string) {
+	ctx, cancel := context.WithTimeout(context.Background(), t.cfg.FusionBrain.Timeout)
+	jobID := randIntByRange(minJobID, maxJobID)
+	if err := t.clientStates.ClientAddFusionBrainJob(cancel, jobID, chatID); err != nil {
+		t.log.Error("Add FusionBrain job err:", zap.Error(err))
+		return []byte(respBodySessionIsNotExist), ""
+	}
+	body, fileName, err := t.fusionBrain.GenerateImage(ctx, text)
+	if errors.Is(err, context.Canceled) {
+		return []byte(respErrBodyJobCanceled), ""
+	}
+	defer func() {
+		if err = t.clientStates.ClientCancelFusionBrainJob(jobID, chatID); err != nil {
+			t.log.Error("Cancel FusionBrain job err:", zap.Error(err))
+		}
+	}()
+	if err != nil {
+		t.log.Error("FusionBrain response err:", zap.Error(err))
+		body = []byte(respErrBodyFusionBrain)
 	}
 	return body, fileName
 }

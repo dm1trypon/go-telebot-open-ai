@@ -8,14 +8,16 @@ import (
 )
 
 var (
-	errChatGPTJobIsNotExist       = errors.New("ChatGPT job '%d' is not exist")
-	errDreamBoothJobIsNotExist    = errors.New("DreamBooth job '%d' is not exist")
-	errOpenAIJobIsNotExist        = errors.New("OpenAI job '%d' is not exist")
-	errChatGPTJobIsAlreadyUsed    = errors.New("ChatGPT job '%d' is already used")
-	errOpenAIJobIsAlreadyUsed     = errors.New("OpenAI job '%d' is already used")
-	errDreamBoothJobIsAlreadyUsed = errors.New("DreamBooth job '%d' is already used")
-	chatIDIsNotExistErr           = errors.New("client with current chatID is not exist")
-	chatIDAlreadyExistErr         = errors.New("client with current chatID already exist")
+	errChatGPTJobIsNotExist        = errors.New("ChatGPT job '%d' is not exist")
+	errDreamBoothJobIsNotExist     = errors.New("DreamBooth job '%d' is not exist")
+	errOpenAIJobIsNotExist         = errors.New("OpenAI job '%d' is not exist")
+	errFusionBrainJobIsNotExist    = errors.New("FusionBrain job '%d' is not exist")
+	errChatGPTJobIsAlreadyUsed     = errors.New("ChatGPT job '%d' is already used")
+	errOpenAIJobIsAlreadyUsed      = errors.New("OpenAI job '%d' is already used")
+	errDreamBoothJobIsAlreadyUsed  = errors.New("DreamBooth job '%d' is already used")
+	errFusionBrainJobIsAlreadyUsed = errors.New("FusionBrain job '%d' is already used")
+	chatIDIsNotExistErr            = errors.New("client with current chatID is not exist")
+	chatIDAlreadyExistErr          = errors.New("client with current chatID already exist")
 )
 
 func ErrorChatGPTJobIsNotExist(id int) error {
@@ -30,6 +32,10 @@ func ErrorOpenAIJobIsNotExist(id int) error {
 	return fmt.Errorf(errOpenAIJobIsNotExist.Error(), id)
 }
 
+func ErrorFusionBrainJobIsNotExist(id int) error {
+	return fmt.Errorf(errFusionBrainJobIsNotExist.Error(), id)
+}
+
 func ErrorChatGPTJobIsAlreadyUsed(id int) error {
 	return fmt.Errorf(errChatGPTJobIsAlreadyUsed.Error(), id)
 }
@@ -42,12 +48,17 @@ func ErrorDreamBoothJobIsAlreadyUsed(id int) error {
 	return fmt.Errorf(errDreamBoothJobIsAlreadyUsed.Error(), id)
 }
 
+func ErrorFusionBrainJobIsAlreadyUsed(id int) error {
+	return fmt.Errorf(errFusionBrainJobIsAlreadyUsed.Error(), id)
+}
+
 type clientState struct {
 	command        string
 	username       string
 	openAICancels  map[int]context.CancelFunc
 	chatGPTCancels map[int]context.CancelFunc
-	ddCancels      map[int]context.CancelFunc
+	dbCancels      map[int]context.CancelFunc
+	fbCancels      map[int]context.CancelFunc
 }
 
 func NewTClient(username string) *clientState {
@@ -56,7 +67,8 @@ func NewTClient(username string) *clientState {
 		username:       username,
 		openAICancels:  make(map[int]context.CancelFunc),
 		chatGPTCancels: make(map[int]context.CancelFunc),
-		ddCancels:      make(map[int]context.CancelFunc),
+		dbCancels:      make(map[int]context.CancelFunc),
+		fbCancels:      make(map[int]context.CancelFunc),
 	}
 }
 
@@ -69,7 +81,11 @@ func (c *clientState) LenChatGPTJobs() int {
 }
 
 func (c *clientState) LenDreamBoothJobs() int {
-	return len(c.ddCancels)
+	return len(c.dbCancels)
+}
+
+func (c *clientState) LenFusionBrainJobs() int {
+	return len(c.dbCancels)
 }
 
 func (c *clientState) SetUsername(username string) {
@@ -97,8 +113,16 @@ func (c *clientState) ChatGPTJobs() []int {
 }
 
 func (c *clientState) DreamBoothJobs() []int {
-	jobIDs := make([]int, 0, len(c.chatGPTCancels))
-	for id := range c.ddCancels {
+	jobIDs := make([]int, 0, len(c.dbCancels))
+	for id := range c.dbCancels {
+		jobIDs = append(jobIDs, id)
+	}
+	return jobIDs
+}
+
+func (c *clientState) FusionBrainJobs() []int {
+	jobIDs := make([]int, 0, len(c.fbCancels))
+	for id := range c.fbCancels {
 		jobIDs = append(jobIDs, id)
 	}
 	return jobIDs
@@ -129,10 +153,18 @@ func (c *clientState) SetCancelChatGPTJob(cancel context.CancelFunc, id int) err
 }
 
 func (c *clientState) SetCancelDreamBoothJob(cancel context.CancelFunc, id int) error {
-	if _, ok := c.ddCancels[id]; ok {
+	if _, ok := c.dbCancels[id]; ok {
 		return ErrorDreamBoothJobIsAlreadyUsed(id)
 	}
-	c.ddCancels[id] = cancel
+	c.dbCancels[id] = cancel
+	return nil
+}
+
+func (c *clientState) SetCancelFusionBrainJob(cancel context.CancelFunc, id int) error {
+	if _, ok := c.fbCancels[id]; ok {
+		return ErrorFusionBrainJobIsAlreadyUsed(id)
+	}
+	c.fbCancels[id] = cancel
 	return nil
 }
 
@@ -147,12 +179,12 @@ func (c *clientState) CancelChatGPTJob(id int) error {
 }
 
 func (c *clientState) CancelDreamBoothJob(id int) error {
-	cancel, ok := c.ddCancels[id]
+	cancel, ok := c.dbCancels[id]
 	if !ok {
 		return ErrorDreamBoothJobIsNotExist(id)
 	}
 	cancel()
-	delete(c.ddCancels, id)
+	delete(c.dbCancels, id)
 	return nil
 }
 
@@ -166,6 +198,16 @@ func (c *clientState) CancelOpenAIJob(id int) error {
 	return nil
 }
 
+func (c *clientState) CancelFusionBrainJob(id int) error {
+	cancel, ok := c.fbCancels[id]
+	if !ok {
+		return ErrorFusionBrainJobIsNotExist(id)
+	}
+	cancel()
+	delete(c.fbCancels, id)
+	return nil
+}
+
 func (c *clientState) CancelChatGPTJobs() {
 	for _, cancel := range c.chatGPTCancels {
 		cancel()
@@ -174,10 +216,10 @@ func (c *clientState) CancelChatGPTJobs() {
 }
 
 func (c *clientState) CancelDreamBoothJobs() {
-	for _, cancel := range c.ddCancels {
+	for _, cancel := range c.dbCancels {
 		cancel()
 	}
-	c.ddCancels = make(map[int]context.CancelFunc)
+	c.dbCancels = make(map[int]context.CancelFunc)
 }
 
 func (c *clientState) CancelOpenAIJobs() {
@@ -185,6 +227,13 @@ func (c *clientState) CancelOpenAIJobs() {
 		cancel()
 	}
 	c.openAICancels = make(map[int]context.CancelFunc)
+}
+
+func (c *clientState) CancelFusionBrainJobs() {
+	for _, cancel := range c.fbCancels {
+		cancel()
+	}
+	c.fbCancels = make(map[int]context.CancelFunc)
 }
 
 type clientStateByChatID struct {
@@ -265,6 +314,16 @@ func (c *clientStateByChatID) ClientOpenAIJobs(chatID int64) ([]int, error) {
 	return tc.OpenAIJobs(), nil
 }
 
+func (c *clientStateByChatID) ClientFusionBrainJobs(chatID int64) ([]int, error) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	tc, ok := c.value[chatID]
+	if !ok || tc == nil {
+		return nil, chatIDIsNotExistErr
+	}
+	return tc.FusionBrainJobs(), nil
+}
+
 func (c *clientStateByChatID) ClientLenChatGPTJobs(chatID int64) (int, error) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
@@ -293,6 +352,16 @@ func (c *clientStateByChatID) ClientLenOpenAIJobs(chatID int64) (int, error) {
 		return -1, chatIDIsNotExistErr
 	}
 	return tc.LenOpenAIJobs(), nil
+}
+
+func (c *clientStateByChatID) ClientLenFusionBrainJobs(chatID int64) (int, error) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	tc, ok := c.value[chatID]
+	if !ok || tc == nil {
+		return -1, chatIDIsNotExistErr
+	}
+	return tc.LenFusionBrainJobs(), nil
 }
 
 func (c *clientStateByChatID) ClientAddChatGPTJob(cancel context.CancelFunc, jobID int, chatID int64) error {
@@ -325,6 +394,16 @@ func (c *clientStateByChatID) ClientAddOpenAIJob(cancel context.CancelFunc, jobI
 	return tc.SetCancelOpenAIJob(cancel, jobID)
 }
 
+func (c *clientStateByChatID) ClientAddFusionBrainJob(cancel context.CancelFunc, jobID int, chatID int64) error {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	tc, ok := c.value[chatID]
+	if !ok || tc == nil {
+		return chatIDIsNotExistErr
+	}
+	return tc.SetCancelFusionBrainJob(cancel, jobID)
+}
+
 func (c *clientStateByChatID) ClientCancelChatGPTJob(jobID int, chatID int64) error {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
@@ -355,6 +434,16 @@ func (c *clientStateByChatID) ClientCancelOpenAIJob(jobID int, chatID int64) err
 	return tc.CancelOpenAIJob(jobID)
 }
 
+func (c *clientStateByChatID) ClientCancelFusionBrainJob(jobID int, chatID int64) error {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	tc, ok := c.value[chatID]
+	if !ok || tc == nil {
+		return chatIDIsNotExistErr
+	}
+	return tc.CancelFusionBrainJob(jobID)
+}
+
 func (c *clientStateByChatID) ClientCancelJobs(chatID int64) error {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
@@ -364,6 +453,7 @@ func (c *clientStateByChatID) ClientCancelJobs(chatID int64) error {
 	}
 	tc.CancelChatGPTJobs()
 	tc.CancelDreamBoothJobs()
+	tc.CancelFusionBrainJobs()
 	return nil
 }
 
