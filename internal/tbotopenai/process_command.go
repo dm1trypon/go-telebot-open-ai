@@ -62,6 +62,12 @@ func (t *TBotOpenAI) commandDreamBoothExample(_, _ string, _ int64) *commandResp
 	}
 }
 
+func (t *TBotOpenAI) commandFusionBrainExample(_, _ string, _ int64) *commandResponse {
+	return &commandResponse{
+		text: respBodyCommandFusionBrainExample,
+	}
+}
+
 func (t *TBotOpenAI) commandStart(_, username string, chatID int64) *commandResponse {
 	if err := t.clientStates.AddClient(chatID, username); err != nil {
 		t.log.Error("Add client err:", zap.Error(err))
@@ -140,6 +146,18 @@ func (t *TBotOpenAI) commandOpenAIImage(command, _ string, chatID int64) *comman
 	}
 }
 
+func (t *TBotOpenAI) commandFusionBrain(command, _ string, chatID int64) *commandResponse {
+	if err := t.clientStates.UpdateClientCommand(chatID, command); err != nil {
+		t.log.Error("Update client command err:", zap.Error(err))
+		return &commandResponse{
+			text: respBodySessionIsNotExist,
+		}
+	}
+	return &commandResponse{
+		text: respBodyCommandFusionBrain,
+	}
+}
+
 func (t *TBotOpenAI) commandCancelJob(command, _ string, chatID int64) *commandResponse {
 	if err := t.clientStates.UpdateClientCommand(chatID, command); err != nil {
 		t.log.Error("Update client command err:", zap.Error(err))
@@ -152,7 +170,13 @@ func (t *TBotOpenAI) commandCancelJob(command, _ string, chatID int64) *commandR
 	}
 }
 
-func (t *TBotOpenAI) commandListJobs(_, _ string, chatID int64) *commandResponse {
+func (t *TBotOpenAI) commandListJobs(_, username string, chatID int64) *commandResponse {
+	curRole := t.getRole(username)
+	if curRole == "" {
+		return &commandResponse{
+			text: respBodyUndefinedCommand,
+		}
+	}
 	textJobIDs, err := t.clientStates.ClientChatGPTJobs(chatID)
 	if err != nil {
 		t.log.Error("Get ChatGPT jobs err:", zap.Error(err))
@@ -174,8 +198,15 @@ func (t *TBotOpenAI) commandListJobs(_, _ string, chatID int64) *commandResponse
 			text: respBodySessionIsNotExist,
 		}
 	}
+	fbIDs, err := t.clientStates.ClientFusionBrainJobs(chatID)
+	if err != nil {
+		t.log.Error("Get FusionBrain jobs err:", zap.Error(err))
+		return &commandResponse{
+			text: respBodySessionIsNotExist,
+		}
+	}
 	return &commandResponse{
-		text: respBodyListJobs(textJobIDs, imgJobIDs, openAIIDs),
+		text: respBodyListJobs(textJobIDs, imgJobIDs, openAIIDs, fbIDs, curRole),
 	}
 }
 

@@ -17,7 +17,9 @@ const (
 	commandOpenAIText         = "openAIText"
 	commandOpenAIImage        = "openAIImage"
 	commandDreamBooth         = "dreamBooth"
-	commandImageCustomExample = "dreamBoothExample"
+	commandDreamBoothExample  = "dreamBoothExample"
+	commandFusionBrain        = "fusionBrain"
+	commandFusionBrainExample = "fusionBrainExample"
 	commandHelp               = "help"
 	commandCancelJob          = "cancelJob"
 	commandListJobs           = "listJobs"
@@ -44,6 +46,7 @@ type TBotOpenAI struct {
 	dreamBooth       AI
 	openAI           AI
 	chatGPTBot       AI
+	fusionBrain      AI
 	clientStates     clientStateByChatID
 	stats            *Stats
 	log              *zap.Logger
@@ -69,6 +72,7 @@ func NewTBotOpenAI(cfg *Config, log *zap.Logger) (*TBotOpenAI, error) {
 		dreamBooth:    NewDreamBoothAPI(log, &cfg.DreamBooth),
 		openAI:        NewOpenAI(&cfg.OpenAI),
 		chatGPTBot:    NewChatGPTBot(),
+		fusionBrain:   NewFusionBrainAPI(log, &cfg.FusionBrain),
 		clientStates:  clientStateByChatID{value: make(map[int64]*clientState)},
 		stats:         NewStats(log, cfg.Stats.Interval, cfg.Stats.Filepath),
 		log:           log,
@@ -82,16 +86,19 @@ func NewTBotOpenAI(cfg *Config, log *zap.Logger) (*TBotOpenAI, error) {
 	t.taskByCmd.Store(commandCancelJob, t.processCancelJob)
 	t.taskByCmd.Store(commandOpenAIText, t.processOpenAIText)
 	t.taskByCmd.Store(commandOpenAIImage, t.processOpenAIImage)
+	t.taskByCmd.Store(commandFusionBrain, t.processFusionBrain)
 	t.taskByCmd.Store(commandBan, t.processBan)
 	t.taskByCmd.Store(commandUnban, t.processUnban)
 	t.clientStateByCmd.Store(commandHelp, t.commandHelp)
-	t.clientStateByCmd.Store(commandImageCustomExample, t.commandDreamBoothExample)
+	t.clientStateByCmd.Store(commandDreamBoothExample, t.commandDreamBoothExample)
+	t.clientStateByCmd.Store(commandFusionBrainExample, t.commandFusionBrainExample)
 	t.clientStateByCmd.Store(commandStart, t.commandStart)
 	t.clientStateByCmd.Store(commandStop, t.commandStop)
 	t.clientStateByCmd.Store(commandChatGPT, t.commandChatGPT)
 	t.clientStateByCmd.Store(commandDreamBooth, t.commandDreamBooth)
 	t.clientStateByCmd.Store(commandOpenAIText, t.commandOpenAIText)
 	t.clientStateByCmd.Store(commandOpenAIImage, t.commandOpenAIImage)
+	t.clientStateByCmd.Store(commandFusionBrain, t.commandFusionBrain)
 	t.clientStateByCmd.Store(commandCancelJob, t.commandCancelJob)
 	t.clientStateByCmd.Store(commandListJobs, t.commandListJobs)
 	t.clientStateByCmd.Store(commandStats, t.commandStats)

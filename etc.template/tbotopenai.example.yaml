@@ -37,6 +37,11 @@ dreambooth:
     - dd_token_5
   retry_interval: 20s
   timeout: 1h
+fusionbrain:
+  retry_interval: 10s
+  timeout: 1h
+  key: key
+  secret_key: secret_key
 roles:
   admin:
     - test_username
