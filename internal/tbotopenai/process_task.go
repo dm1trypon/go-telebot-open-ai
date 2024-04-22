@@ -185,7 +185,7 @@ func (t *TBotOpenAI) processFusionBrain(text string, chatID int64) ([]byte, stri
 
 func (t *TBotOpenAI) writeStats(command, username, request, response string) {
 	switch command {
-	case commandChatGPT, commandOpenAIImage, commandOpenAIText, commandDreamBooth:
+	case commandChatGPT, commandOpenAIImage, commandOpenAIText, commandDreamBooth, commandFusionBrain:
 		loc, err := time.LoadLocation("Europe/Moscow")
 		if err != nil {
 			t.log.Error("Load location err:", zap.Error(err))
