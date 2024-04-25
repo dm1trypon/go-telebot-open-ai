@@ -59,6 +59,7 @@ type clientState struct {
 	chatGPTCancels map[int]context.CancelFunc
 	dbCancels      map[int]context.CancelFunc
 	fbCancels      map[int]context.CancelFunc
+	fbRows         []string
 }
 
 func NewTClient(username string) *clientState {
@@ -69,6 +70,7 @@ func NewTClient(username string) *clientState {
 		chatGPTCancels: make(map[int]context.CancelFunc),
 		dbCancels:      make(map[int]context.CancelFunc),
 		fbCancels:      make(map[int]context.CancelFunc),
+		fbRows:         make([]string, 0, countRequestFields),
 	}
 }
 
@@ -234,6 +236,21 @@ func (c *clientState) CancelFusionBrainJobs() {
 		cancel()
 	}
 	c.fbCancels = make(map[int]context.CancelFunc)
+}
+
+func (c *clientState) FusionBrainRequestRows() []string {
+	return c.fbRows
+}
+
+func (c *clientState) AppendToFusionBrainRequestRows(row string) {
+	if len(c.fbRows) >= countRequestFields {
+		return
+	}
+	c.fbRows = append(c.fbRows, row)
+}
+
+func (c *clientState) ResetFusionBrainRequestRows() {
+	c.fbRows = make([]string, 0, countRequestFields)
 }
 
 type clientStateByChatID struct {
@@ -465,4 +482,36 @@ func (c *clientStateByChatID) ClientUsername(chatID int64) (string, error) {
 		return "", chatIDIsNotExistErr
 	}
 	return tc.Username(), nil
+}
+
+func (c *clientStateByChatID) ClientFusionBrainRequestRows(chatID int64) ([]string, error) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	tc, ok := c.value[chatID]
+	if !ok || tc == nil {
+		return nil, chatIDIsNotExistErr
+	}
+	return tc.FusionBrainRequestRows(), nil
+}
+
+func (c *clientStateByChatID) AppendToClientFusionBrainRequestRows(row string, chatID int64) error {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	tc, ok := c.value[chatID]
+	if !ok || tc == nil {
+		return chatIDIsNotExistErr
+	}
+	tc.AppendToFusionBrainRequestRows(row)
+	return nil
+}
+
+func (c *clientStateByChatID) ResetClientFusionBrainRequestRows(chatID int64) error {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	tc, ok := c.value[chatID]
+	if !ok || tc == nil {
+		return chatIDIsNotExistErr
+	}
+	tc.ResetFusionBrainRequestRows()
+	return nil
 }
