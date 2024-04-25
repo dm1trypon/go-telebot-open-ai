@@ -163,23 +163,27 @@ func (t *TBotOpenAI) initProcessMessagesWorker(wg *sync.WaitGroup) {
 				continue
 			}
 			resp := t.processCommand(msg.command, msg.username, msg.chatID)
-			if resp != nil && resp.text != "" {
-				if err := t.telegram.ReplyText(msg.messageID, msg.chatID, resp.text); err != nil {
-					t.log.Error("Reply message error:", zap.Error(err))
-				}
-				continue
-			} else if resp != nil && resp.fileBody != nil {
-				if err := t.telegram.ReplyFile(msg.messageID, msg.chatID, resp.fileBody, resp.fileName); err != nil {
-					t.log.Error("Reply message error:", zap.Error(err))
-				}
-				continue
-			}
-			if msg.text == "" {
+			if resp != nil {
 				if err := t.clientStates.ResetClientFusionBrainRequestRows(msg.chatID); err != nil {
 					if err = t.telegram.ReplyText(msg.messageID, msg.chatID, respBodySessionIsNotExist); err != nil {
 						t.log.Error("Reply message error:", zap.Error(err))
 					}
+					continue
 				}
+				switch {
+				case resp.text != "":
+					if err := t.telegram.ReplyText(msg.messageID, msg.chatID, resp.text); err != nil {
+						t.log.Error("Reply message error:", zap.Error(err))
+					}
+					continue
+				case resp.fileBody != nil:
+					if err := t.telegram.ReplyFile(msg.messageID, msg.chatID, resp.fileBody, resp.fileName); err != nil {
+						t.log.Error("Reply message error:", zap.Error(err))
+					}
+					continue
+				}
+			}
+			if msg.text == "" {
 				continue
 			}
 			var (
@@ -223,11 +227,11 @@ func (t *TBotOpenAI) initProcessMessagesWorker(wg *sync.WaitGroup) {
 			t.queueTaskChan <- msg
 			val, ok := t.respBodiesAfterTask.Load(command)
 			if !ok {
-				return
+				continue
 			}
 			respBody, ok = val.(string)
 			if !ok {
-				return
+				continue
 			}
 			if err = t.telegram.ReplyText(msg.messageID, msg.chatID, respBody); err != nil {
 				t.log.Error("Reply to client err:", zap.Error(err))
