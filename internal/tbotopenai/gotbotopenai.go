@@ -175,6 +175,11 @@ func (t *TBotOpenAI) initProcessMessagesWorker(wg *sync.WaitGroup) {
 				continue
 			}
 			if msg.text == "" {
+				if err := t.clientStates.ResetClientFusionBrainRequestRows(msg.chatID); err != nil {
+					if err = t.telegram.ReplyText(msg.messageID, msg.chatID, respBodySessionIsNotExist); err != nil {
+						t.log.Error("Reply message error:", zap.Error(err))
+					}
+				}
 				continue
 			}
 			var (
@@ -200,7 +205,7 @@ func (t *TBotOpenAI) initProcessMessagesWorker(wg *sync.WaitGroup) {
 				msg.text = text
 			}
 			if err = t.clientStates.ResetClientFusionBrainRequestRows(msg.chatID); err != nil {
-				if err = t.telegram.ReplyText(msg.messageID, msg.chatID, respBody); err != nil {
+				if err = t.telegram.ReplyText(msg.messageID, msg.chatID, respBodySessionIsNotExist); err != nil {
 					t.log.Error("Reply message error:", zap.Error(err))
 				}
 				continue
@@ -212,10 +217,21 @@ func (t *TBotOpenAI) initProcessMessagesWorker(wg *sync.WaitGroup) {
 				}
 				continue
 			}
-			if err := t.telegram.ReplyText(msg.messageID, msg.chatID, respBodyRequestAddedToQueue); err != nil {
+			if err = t.telegram.ReplyText(msg.messageID, msg.chatID, respBodyRequestAddedToQueue); err != nil {
 				t.log.Error("Reply message error:", zap.Error(err))
 			}
 			t.queueTaskChan <- msg
+			val, ok := t.respBodiesAfterTask.Load(command)
+			if !ok {
+				return
+			}
+			respBody, ok = val.(string)
+			if !ok {
+				return
+			}
+			if err = t.telegram.ReplyText(msg.messageID, msg.chatID, respBody); err != nil {
+				t.log.Error("Reply to client err:", zap.Error(err))
+			}
 		}
 	}
 }
@@ -270,25 +286,6 @@ func (t *TBotOpenAI) processQueueTask(text string, messageID int, chatID int64) 
 		err = t.telegram.ReplyText(messageID, chatID, string(body))
 	}
 	if err != nil {
-		t.log.Error("Reply to client err:", zap.Error(err))
-		return
-	}
-	var command string
-	command, err = t.clientStates.ClientCommand(chatID)
-	if err != nil {
-		t.log.Error("Get client command err:", zap.Error(err))
-		return
-	}
-	val, ok := t.respBodiesAfterTask.Load(command)
-	if !ok {
-		return
-	}
-	var respBody string
-	respBody, ok = val.(string)
-	if !ok {
-		return
-	}
-	if err = t.telegram.ReplyText(messageID, chatID, respBody); err != nil {
 		t.log.Error("Reply to client err:", zap.Error(err))
 	}
 }
