@@ -62,12 +62,6 @@ func (t *TBotOpenAI) commandDreamBoothExample(_, _ string, _ int64) *commandResp
 	}
 }
 
-func (t *TBotOpenAI) commandFusionBrainExample(_, _ string, _ int64) *commandResponse {
-	return &commandResponse{
-		text: respBodyCommandFusionBrainExample,
-	}
-}
-
 func (t *TBotOpenAI) commandStart(_, username string, chatID int64) *commandResponse {
 	if err := t.clientStates.AddClient(chatID, username); err != nil {
 		t.log.Error("Add client err:", zap.Error(err))
@@ -154,7 +148,7 @@ func (t *TBotOpenAI) commandFusionBrain(command, _ string, chatID int64) *comman
 		}
 	}
 	return &commandResponse{
-		text: respBodyCommandFusionBrain,
+		text: respBodyCommandFusionBrain + "\n" + respBodyFusionBrainInput[0],
 	}
 }
 

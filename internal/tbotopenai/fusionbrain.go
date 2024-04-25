@@ -14,6 +14,8 @@ import (
 )
 
 const (
+	countRequestFields = 5
+
 	defaultWidth  = 512
 	defaultHeight = 512
 

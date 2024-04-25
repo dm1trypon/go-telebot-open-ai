@@ -11,23 +11,22 @@ import (
 )
 
 const (
-	commandStart              = "start"
-	commandStop               = "stop"
-	commandChatGPT            = "chatGPT"
-	commandOpenAIText         = "openAIText"
-	commandOpenAIImage        = "openAIImage"
-	commandDreamBooth         = "dreamBooth"
-	commandDreamBoothExample  = "dreamBoothExample"
-	commandFusionBrain        = "fusionBrain"
-	commandFusionBrainExample = "fusionBrainExample"
-	commandHelp               = "help"
-	commandCancelJob          = "cancelJob"
-	commandListJobs           = "listJobs"
-	commandStats              = "stats"
-	commandLogs               = "logs"
-	commandBan                = "ban"
-	commandUnban              = "unban"
-	commandBlacklist          = "blacklist"
+	commandStart             = "start"
+	commandStop              = "stop"
+	commandChatGPT           = "chatGPT"
+	commandOpenAIText        = "openAIText"
+	commandOpenAIImage       = "openAIImage"
+	commandDreamBooth        = "dreamBooth"
+	commandDreamBoothExample = "dreamBoothExample"
+	commandFusionBrain       = "fusionBrain"
+	commandHelp              = "help"
+	commandCancelJob         = "cancelJob"
+	commandListJobs          = "listJobs"
+	commandStats             = "stats"
+	commandLogs              = "logs"
+	commandBan               = "ban"
+	commandUnban             = "unban"
+	commandBlacklist         = "blacklist"
 )
 
 const (
@@ -41,22 +40,23 @@ type AI interface {
 }
 
 type TBotOpenAI struct {
-	cfg              *Config
-	telegram         Messenger
-	dreamBooth       AI
-	openAI           AI
-	chatGPTBot       AI
-	fusionBrain      AI
-	clientStates     clientStateByChatID
-	stats            *Stats
-	log              *zap.Logger
-	msgChan          chan *message
-	queueTaskChan    chan *message
-	userRoles        sync.Map
-	permissions      sync.Map
-	taskByCmd        sync.Map
-	clientStateByCmd sync.Map
-	blacklist        sync.Map
+	cfg                 *Config
+	telegram            Messenger
+	dreamBooth          AI
+	openAI              AI
+	chatGPTBot          AI
+	fusionBrain         AI
+	clientStates        clientStateByChatID
+	stats               *Stats
+	log                 *zap.Logger
+	msgChan             chan *message
+	queueTaskChan       chan *message
+	userRoles           sync.Map
+	permissions         sync.Map
+	taskByCmd           sync.Map
+	clientStateByCmd    sync.Map
+	blacklist           sync.Map
+	respBodiesAfterTask sync.Map
 }
 
 func NewTBotOpenAI(cfg *Config, log *zap.Logger) (*TBotOpenAI, error) {
@@ -91,7 +91,6 @@ func NewTBotOpenAI(cfg *Config, log *zap.Logger) (*TBotOpenAI, error) {
 	t.taskByCmd.Store(commandUnban, t.processUnban)
 	t.clientStateByCmd.Store(commandHelp, t.commandHelp)
 	t.clientStateByCmd.Store(commandDreamBoothExample, t.commandDreamBoothExample)
-	t.clientStateByCmd.Store(commandFusionBrainExample, t.commandFusionBrainExample)
 	t.clientStateByCmd.Store(commandStart, t.commandStart)
 	t.clientStateByCmd.Store(commandStop, t.commandStop)
 	t.clientStateByCmd.Store(commandChatGPT, t.commandChatGPT)
@@ -106,6 +105,7 @@ func NewTBotOpenAI(cfg *Config, log *zap.Logger) (*TBotOpenAI, error) {
 	t.clientStateByCmd.Store(commandBan, t.commandBan)
 	t.clientStateByCmd.Store(commandUnban, t.commandUnban)
 	t.clientStateByCmd.Store(commandBlacklist, t.commandBlacklist)
+	t.respBodiesAfterTask.Store(commandFusionBrain, respBodyFusionBrainInput[0])
 	if err = t.storeBlacklist(); err != nil {
 		return nil, err
 	}
@@ -177,9 +177,37 @@ func (t *TBotOpenAI) initProcessMessagesWorker(wg *sync.WaitGroup) {
 			if msg.text == "" {
 				continue
 			}
-			respBody = t.checkJobsLimit(msg.chatID)
+			var (
+				command string
+				err     error
+			)
+			command, err = t.clientStates.ClientCommand(msg.chatID)
+			if err != nil {
+				t.log.Error("Get client command err:", zap.Error(err))
+				if err = t.telegram.ReplyText(msg.messageID, msg.chatID, respBodySessionIsNotExist); err != nil {
+					t.log.Error("Reply message error:", zap.Error(err))
+				}
+				continue
+			}
+			text, isReady := t.processPrepareFusionBrainRequest(msg.text, command, msg.chatID)
+			if !isReady {
+				if err = t.telegram.ReplyText(msg.messageID, msg.chatID, text); err != nil {
+					t.log.Error("Reply message error:", zap.Error(err))
+				}
+				continue
+			}
+			if text != "" {
+				msg.text = text
+			}
+			if err = t.clientStates.ResetClientFusionBrainRequestRows(msg.chatID); err != nil {
+				if err = t.telegram.ReplyText(msg.messageID, msg.chatID, respBody); err != nil {
+					t.log.Error("Reply message error:", zap.Error(err))
+				}
+				continue
+			}
+			respBody = t.checkJobsLimit(command, msg.chatID)
 			if respBody != "" {
-				if err := t.telegram.ReplyText(msg.messageID, msg.chatID, respBody); err != nil {
+				if err = t.telegram.ReplyText(msg.messageID, msg.chatID, respBody); err != nil {
 					t.log.Error("Reply message error:", zap.Error(err))
 				}
 				continue
@@ -192,12 +220,7 @@ func (t *TBotOpenAI) initProcessMessagesWorker(wg *sync.WaitGroup) {
 	}
 }
 
-func (t *TBotOpenAI) checkJobsLimit(chatID int64) string {
-	command, err := t.clientStates.ClientCommand(chatID)
-	if err != nil {
-		t.log.Error("Get client command err:", zap.Error(err))
-		return respBodySessionIsNotExist
-	}
+func (t *TBotOpenAI) checkJobsLimit(command string, chatID int64) string {
 	switch command {
 	case commandChatGPT:
 		if body := t.checkClientChatGPTJobs(chatID); body != "" {
@@ -247,6 +270,25 @@ func (t *TBotOpenAI) processQueueTask(text string, messageID int, chatID int64) 
 		err = t.telegram.ReplyText(messageID, chatID, string(body))
 	}
 	if err != nil {
+		t.log.Error("Reply to client err:", zap.Error(err))
+		return
+	}
+	var command string
+	command, err = t.clientStates.ClientCommand(chatID)
+	if err != nil {
+		t.log.Error("Get client command err:", zap.Error(err))
+		return
+	}
+	val, ok := t.respBodiesAfterTask.Load(command)
+	if !ok {
+		return
+	}
+	var respBody string
+	respBody, ok = val.(string)
+	if !ok {
+		return
+	}
+	if err = t.telegram.ReplyText(messageID, chatID, respBody); err != nil {
 		t.log.Error("Reply to client err:", zap.Error(err))
 	}
 }
@@ -341,4 +383,23 @@ func (t *TBotOpenAI) writeBlacklistToFile() error {
 		t.log.Error("Write blacklist's file err", zap.Error(err))
 	}
 	return err
+}
+
+func (t *TBotOpenAI) processPrepareFusionBrainRequest(text, command string, chatID int64) (string, bool) {
+	if command != commandFusionBrain {
+		return "", true
+	}
+	if err := t.clientStates.AppendToClientFusionBrainRequestRows(text, chatID); err != nil {
+		t.log.Error("Append to client's FusionBrain request's rows err:", zap.Error(err))
+		return respBodySessionIsNotExist, false
+	}
+	rows, err := t.clientStates.ClientFusionBrainRequestRows(chatID)
+	if err != nil {
+		t.log.Error("Get client's FusionBrain request's rows err:", zap.Error(err))
+		return respBodySessionIsNotExist, false
+	}
+	if len(rows) < countRequestFields {
+		return respBodyFusionBrainInput[len(rows)], false
+	}
+	return strings.Join(rows, "\n"), true
 }
