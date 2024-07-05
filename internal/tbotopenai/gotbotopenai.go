@@ -164,7 +164,7 @@ func (t *TBotOpenAI) initProcessMessagesWorker(wg *sync.WaitGroup) {
 			}
 			resp := t.processCommand(msg.command, msg.username, msg.chatID)
 			if resp != nil {
-				if err := t.clientStates.ResetClientFusionBrainRequestRows(msg.chatID); err != nil {
+				if err := t.clientStates.ResetClientFusionBrainRequestRows(msg.chatID); err != nil && msg.command != commandStop {
 					if err = t.telegram.ReplyText(msg.messageID, msg.chatID, respBodySessionIsNotExist); err != nil {
 						t.log.Error("Reply message error:", zap.Error(err))
 					}
