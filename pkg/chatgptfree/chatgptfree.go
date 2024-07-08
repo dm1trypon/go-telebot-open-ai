@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strconv"
+
 	"github.com/valyala/fasthttp"
 	"github.com/valyala/fastjson"
 )
@@ -72,8 +74,8 @@ func GenerateText(ctx context.Context, prompt string) ([]byte, error) {
 
 func prepareRequestBody(content string) []byte {
 	var b bytes.Buffer
-	b.WriteString(`{"messages":[{"role":"user","content":"`)
-	b.WriteString(content)
-	b.WriteString(`"}],"stream":false,"model":"gpt-3.5","temperature":0.5,"presence_penalty":0,"frequency_penalty":0,"top_p":1}`)
+	b.WriteString(`{"messages":[{"role":"user","content":`)
+	b.WriteString(strconv.Quote(content))
+	b.WriteString(`}],"stream":false,"model":"gpt-3.5","temperature":0.5,"presence_penalty":0,"frequency_penalty":0,"top_p":1}`)
 	return b.Bytes()
 }
