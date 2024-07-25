@@ -3,6 +3,7 @@ package chatgptfree
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"strconv"
 
@@ -16,6 +17,10 @@ var (
 	errResponseCodeIsNot200 = errors.New("response code is not 200")
 	errEmptyRespChoices     = errors.New("response's choices are empty")
 )
+
+var client = fasthttp.Client{
+	TLSConfig: &tls.Config{InsecureSkipVerify: true},
+}
 
 func GenerateText(ctx context.Context, prompt string) ([]byte, error) {
 	req := fasthttp.AcquireRequest()
@@ -41,7 +46,7 @@ func GenerateText(ctx context.Context, prompt string) ([]byte, error) {
 	bodyChan := make(chan []byte, 1)
 	errChan := make(chan error, 1)
 	go func() {
-		if err := fasthttp.Do(req, resp); err != nil {
+		if err := client.Do(req, resp); err != nil {
 			errChan <- err
 			return
 		}
