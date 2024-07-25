@@ -10,7 +10,7 @@ import (
 	"github.com/valyala/fastjson"
 )
 
-const chatGPTTextURI = "https://gpt-chatbotru-chat-main.ru/api/openai/v1/chat/completions"
+const chatGPTTextURI = "https://origin.nextway.top/api/openai/v1/chat/completions"
 
 var (
 	errResponseCodeIsNot200 = errors.New("response code is not 200")
@@ -76,6 +76,6 @@ func prepareRequestBody(content string) []byte {
 	var b bytes.Buffer
 	b.WriteString(`{"messages":[{"role":"user","content":`)
 	b.WriteString(strconv.Quote(content))
-	b.WriteString(`}],"stream":false,"model":"gpt-3.5","temperature":0.5,"presence_penalty":0,"frequency_penalty":0,"top_p":1}`)
+	b.WriteString(`}],"stream":false,"model":"gpt-4o-mini","temperature":0.5,"presence_penalty":0,"frequency_penalty":0,"top_p":1,"chat_token":126,"captchaToken":"1"}`)
 	return b.Bytes()
 }
